@@ -63,7 +63,9 @@ DataType Tensor::getDataType() const
     case nvinfer1::DataType::kBF16: return DataType::kBF16;
     case nvinfer1::DataType::kINT64: return DataType::kINT64;
     case nvinfer1::DataType::kINT4: [[fallthrough]] /* do nothing */;
+#ifdef ENABLE_FP4
     case nvinfer1::DataType::kFP4: [[fallthrough]] /* do nothing */;
+#endif
     default: TLLM_THROW("Unsupported data type");
     }
 }

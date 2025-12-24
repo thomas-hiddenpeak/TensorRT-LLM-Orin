@@ -256,8 +256,11 @@ def generate_fmha_cu(project_dir, venv_python):
     fmha_v2_dir = project_dir / "cpp/kernels/fmha_v2"
 
     env = os.environ.copy()
+    # Use TORCH_CUDA_ARCH_LIST from environment if set, otherwise default to 9.0
+    # For Jetson AGX Orin (SM 8.7), set TORCH_CUDA_ARCH_LIST=8.7 before running
+    cuda_arch_list = os.environ.get("TORCH_CUDA_ARCH_LIST", "9.0")
     env.update({
-        "TORCH_CUDA_ARCH_LIST": "9.0",
+        "TORCH_CUDA_ARCH_LIST": cuda_arch_list,
         "ENABLE_SM89_QMMA": "1",
         "ENABLE_HMMA_FP32": "1",
         "GENERATE_CUBIN": "1",

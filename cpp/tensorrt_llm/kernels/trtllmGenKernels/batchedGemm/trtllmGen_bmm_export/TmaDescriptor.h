@@ -61,10 +61,16 @@ inline CUtensorMap buildNdTmaDescriptor(tg::Dtype dtype, std::vector<uint64_t> c
     }
     else if (dtype == tg::Dtype::E2m1)
     {
+#if defined(CU_TENSOR_MAP_DATA_TYPE_16U4_ALIGN8B)
         tmaDataFormat = CU_TENSOR_MAP_DATA_TYPE_16U4_ALIGN8B;
+#else
+        std::cerr << "buildNdTmaDescriptor: E2m1 (FP4) requires CUDA 12.8+" << std::endl;
+        assert(false && "E2m1 dtype requires CUDA 12.8+");
+#endif
     }
     else if (dtype == tg::Dtype::MxE2m1 || dtype == tg::Dtype::MxInt4)
     {
+#if defined(CU_TENSOR_MAP_DATA_TYPE_16U4_ALIGN16B)
         if (doPad)
         {
             padMultiplier = 2;
@@ -74,6 +80,10 @@ inline CUtensorMap buildNdTmaDescriptor(tg::Dtype dtype, std::vector<uint64_t> c
         {
             tmaDataFormat = CU_TENSOR_MAP_DATA_TYPE_16U4_ALIGN8B;
         }
+#else
+        std::cerr << "buildNdTmaDescriptor: MxE2m1/MxInt4 (MXFP4) requires CUDA 12.8+" << std::endl;
+        assert(false && "MxE2m1/MxInt4 dtype requires CUDA 12.8+");
+#endif
     }
     else if (dtype == tg::Dtype::Fp32)
     {

@@ -538,11 +538,14 @@ struct KernelParams
         CUtensorMap desc{};
         // The data type.
         CUtensorMapDataType tmaDataFormat;
+#ifdef ENABLE_FP4
         if (dtypeElt == DATA_TYPE_E2M1)
         {
             tmaDataFormat = unpack4b ? CU_TENSOR_MAP_DATA_TYPE_16U4_ALIGN16B : CU_TENSOR_MAP_DATA_TYPE_UINT8;
         }
-        else if (dtypeElt == DATA_TYPE_E4M3)
+        else
+#endif
+        if (dtypeElt == DATA_TYPE_E4M3)
         {
             tmaDataFormat = CU_TENSOR_MAP_DATA_TYPE_UINT8;
         }
@@ -566,10 +569,12 @@ struct KernelParams
         {
             swizzleType = CU_TENSOR_MAP_SWIZZLE_NONE;
         }
+#ifdef ENABLE_FP4
         else if (tmaDataFormat == CU_TENSOR_MAP_DATA_TYPE_16U4_ALIGN16B)
         {
             swizzleType = CU_TENSOR_MAP_SWIZZLE_128B;
         }
+#endif
         else if ((numBytesInLeadingDim % 128) == 0)
         {
             swizzleType = CU_TENSOR_MAP_SWIZZLE_128B;

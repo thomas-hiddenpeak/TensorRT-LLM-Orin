@@ -46,6 +46,10 @@ from tensorrt_llm.bindings import DataType, GptJsonConfig, LayerType
 from tensorrt_llm.bindings.BuildInfo import ENABLE_MULTI_DEVICE
 from tensorrt_llm.logger import logger
 
+# Check if FP4 is supported (TensorRT 10.8+ and CUDA 12.8+)
+TRT_HAS_FP4 = hasattr(trt, 'fp4')
+TRT_FP4_DTYPE = trt.fp4 if TRT_HAS_FP4 else None
+
 # numpy doesn't know bfloat16, define abstract binary type instead
 np_bfloat16 = np.dtype('V2', metadata={"dtype": "bfloat16"})
 np_float8 = np.dtype('V1', metadata={"dtype": "float8"})
@@ -194,8 +198,10 @@ _binding_dtype_bits = {
     DataType.FP8: 8,
     DataType.INT8: 8,
     DataType.UINT8: 8,
-    DataType.NVFP4: 4,
 }
+# Add NVFP4 if available (TensorRT 10.8+)
+if hasattr(DataType, 'NVFP4'):
+    _binding_dtype_bits[DataType.NVFP4] = 4
 
 
 def binding_layer_type_to_str(layer_type: LayerType) -> str:
@@ -238,8 +244,10 @@ _str_to_trt_dtype_dict = dict(float16=trt.float16,
                               int8=trt.int8,
                               bool=trt.bool,
                               bfloat16=trt.bfloat16,
-                              fp8=trt.fp8,
-                              nvfp4=trt.fp4)
+                              fp8=trt.fp8)
+# Add nvfp4 if available (TensorRT 10.8+)
+if hasattr(trt, 'fp4'):
+    _str_to_trt_dtype_dict['nvfp4'] = trt.fp4
 
 
 def str_dtype_to_trt(dtype):

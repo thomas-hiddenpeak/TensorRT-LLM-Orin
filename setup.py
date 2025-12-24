@@ -92,9 +92,39 @@ class BinaryDistribution(Distribution):
         return True
 
 
+def is_jetson_platform():
+    """Detect if running on NVIDIA Jetson platform (aarch64 with tegra)"""
+    import sysconfig
+    platform_tag = sysconfig.get_platform()
+    is_aarch64 = "aarch64" in platform_tag or "arm64" in platform_tag
+    # Check for Jetson-specific indicators
+    is_tegra = Path("/etc/nv_tegra_release").exists() or Path("/proc/device-tree/model").exists()
+    if is_tegra and is_aarch64:
+        try:
+            with open("/proc/device-tree/model", "r") as f:
+                model = f.read().lower()
+                if "jetson" in model or "orin" in model:
+                    return True
+        except:
+            pass
+        # Fallback: check tegra release file
+        if Path("/etc/nv_tegra_release").exists():
+            return True
+    return is_aarch64  # Assume Jetson for any aarch64 Linux
+
+
 on_windows = platform.system() == "Windows"
-required_deps, extra_URLs = parse_requirements(
-    Path("requirements-windows.txt" if on_windows else "requirements.txt"))
+on_jetson = not on_windows and is_jetson_platform()
+
+# Select appropriate requirements file
+if on_windows:
+    req_file = "requirements-windows.txt"
+elif on_jetson and Path("requirements-jetson.txt").exists():
+    req_file = "requirements-jetson.txt"
+else:
+    req_file = "requirements.txt"
+
+required_deps, extra_URLs = parse_requirements(Path(req_file))
 devel_deps, _ = parse_requirements(
     Path("requirements-dev-windows.txt"
          if on_windows else "requirements-dev.txt"))
@@ -116,6 +146,7 @@ else:
         'libs/libtensorrt_llm_nixl_wrapper.so', 'libs/nixl/**/*',
         'libs/libtensorrt_llm_mooncake_wrapper.so', 'libs/ucx/**/*',
         'libs/libpg_utils.so', 'libs/libdecoder_attention_1.so',
+        'libs/libios_base_stub.so',
         'libs/nvshmem/License.txt', 'libs/nvshmem/nvshmem_bootstrap_uid.so.3',
         'libs/nvshmem/nvshmem_transport_ibgda.so.103', 'bindings.*.so',
         'deep_ep/LICENSE', 'deep_ep/*.py', 'deep_ep_cpp_tllm.*.so',

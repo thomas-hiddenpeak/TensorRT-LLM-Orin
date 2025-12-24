@@ -56,7 +56,12 @@ CUtensorMap buildNdTmaDescriptor(tg::Dtype dtype, std::vector<uint64_t> const& s
     }
     else if (dtype == tg::Dtype::E2m1)
     {
+#if defined(CU_TENSOR_MAP_DATA_TYPE_16U4_ALIGN8B)
         tmaDataFormat = CU_TENSOR_MAP_DATA_TYPE_16U4_ALIGN8B;
+#else
+        std::cerr << "E2m1 (FP4) requires CUDA 12.8+" << std::endl;
+        assert(false && "E2m1 dtype requires CUDA 12.8+");
+#endif
     }
     else if (dtype == tg::Dtype::Fp32)
     {

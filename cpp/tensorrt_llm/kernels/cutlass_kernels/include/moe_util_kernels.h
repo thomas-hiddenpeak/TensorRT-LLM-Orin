@@ -24,6 +24,8 @@
 #include "tensorrt_llm/kernels/cutlass_kernels/fp8_blockscale_gemm/fp8_blockscale_gemm.h"
 #ifdef ENABLE_FP4
 #include <cuda_fp4.h>
+#else
+#include "tensorrt_llm/common/fp4_compat.h"
 #endif
 #include <NvInferRuntime.h>
 #include <array>

@@ -84,6 +84,7 @@ void CublasMMWrapper::setScaleDescriptors(void* scale_a, void* scale_b)
     check_cuda_error(
         cublasLtMatmulDescSetAttribute(mOperationDesc, CUBLASLT_MATMUL_DESC_B_SCALE_POINTER, &scale_b, sizeof(void*)));
 
+#ifdef ENABLE_CUBLASLT_FP4_GEMM
     // Set scaling modes for FP4 GEMM
     if (mAType == CUDA_R_4F_E2M1)
     {
@@ -116,6 +117,7 @@ void CublasMMWrapper::setScaleDescriptors(void* scale_a, void* scale_b)
         check_cuda_error(cublasLtMatmulDescSetAttribute(
             mOperationDesc, CUBLASLT_MATMUL_DESC_D_OUT_SCALE_POINTER, &d_out_scale_ptr, sizeof(d_out_scale_ptr)));
     }
+#endif
 }
 
 void CublasMMWrapper::setBiasDescriptor(void* bias)
@@ -306,13 +308,16 @@ void CublasMMWrapper::setGemmConfig(
     mBType = bType;
     mCType = cType;
     bool isFp16ComputeType = computeType == CUDA_R_16F;
+#ifdef ENABLE_CUBLASLT_FP4_GEMM
     if (mAType == CUDA_R_4F_E2M1)
     {
         // for cublaslt nvfp4 gemm, fp32 compute type and fp32 scale type are required
         mComputeType = CUBLAS_COMPUTE_32F;
         mScaleType = CUDA_R_32F;
     }
-    else if (isFp16ComputeType)
+    else
+#endif
+    if (isFp16ComputeType)
     {
         mComputeType = CUBLAS_COMPUTE_16F;
         mScaleType = CUDA_R_16F;

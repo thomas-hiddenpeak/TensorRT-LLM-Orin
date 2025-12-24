@@ -24,8 +24,9 @@ import tensorrt as trt
 # isort: on
 
 from ._common import default_net
-from ._utils import (copy_torch_to_numpy, np_dtype_to_trt, str_dtype_to_trt,
-                     torch_to_numpy, trt_dtype_to_np, trt_dtype_to_torch)
+from ._utils import (TRT_FP4_DTYPE, TRT_HAS_FP4, copy_torch_to_numpy,
+                     np_dtype_to_trt, str_dtype_to_trt, torch_to_numpy,
+                     trt_dtype_to_np, trt_dtype_to_torch)
 from .functional import Tensor, constant
 from .logger import logger
 from .network import Network
@@ -107,7 +108,8 @@ class Parameter:
             lower_shape = None
             # workaround for reinterpreted data type
             dtype = self._value.dtype
-            if (self.dtype == trt.fp4 or self.dtype
+            _is_fp4 = TRT_HAS_FP4 and self.dtype == TRT_FP4_DTYPE
+            if (_is_fp4 or self.dtype
                     == trt.fp8) and (dtype == np.uint8 or dtype == np.int8
                                      or dtype == np.int32 or dtype == np.int64):
                 lower_type = self.dtype
@@ -116,7 +118,7 @@ class Parameter:
             self._value = constant(self._value, lower_type, lower_shape)
             return self._value
         elif self._value is None or isinstance(self._value, np.ndarray):
-            if self._dtype == trt.fp4:
+            if TRT_HAS_FP4 and self._dtype == TRT_FP4_DTYPE:
                 shape = list(self._shape)
                 assert shape[
                     -1] % 16 == 0, "For FP4, the last dimension of the shape should be multiple of 16"
@@ -213,7 +215,7 @@ class Parameter:
             # convert the scalar into a tensor which each dim is 1.
             v = v.reshape(self.shape)
 
-        if self.dtype == trt.fp4:
+        if TRT_HAS_FP4 and self.dtype == TRT_FP4_DTYPE:
             assert v.shape[:-1] == self.shape[:-1] and v.shape[-1] == self.shape[-1] // 2 // v.dtype.itemsize, \
                 f'For FP4, the shape of the value should be the same as the original shape, ' \
                 f'except the last dimension should be half of the original shape. ' \
@@ -222,7 +224,8 @@ class Parameter:
             assert v.shape == self.shape, \
                 f'The value updated is not the same shape as the original. ' \
                 f'Updated: {v.shape}, original: {self.shape}'
-        if (self.dtype == trt.fp4 or self.dtype
+        _is_fp4 = TRT_HAS_FP4 and self.dtype == TRT_FP4_DTYPE
+        if (_is_fp4 or self.dtype
                 == trt.fp8) and (v.dtype == np.int8 or v.dtype == np.uint8
                                  or v.dtype == np.int32 or v.dtype == np.int64):
             pass

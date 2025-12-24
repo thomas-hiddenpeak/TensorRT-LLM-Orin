@@ -21,9 +21,7 @@
 #include "cutlass_extensions/epilogue_helpers.h"
 #include "tensorrt_llm/common/config.h"
 
-#ifdef ENABLE_FP4
-#include <cuda_fp4.h>
-#endif
+// FP4 compatibility is handled via moe_gemm_kernels.h -> fp4_compat.h
 
 TRTLLM_NAMESPACE_BEGIN
 

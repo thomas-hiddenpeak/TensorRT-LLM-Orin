@@ -58,10 +58,8 @@ set(PLUGIN_LISTS
     gemmSwigluPlugin
     fp8RowwiseGemmPlugin
     smoothQuantGemmPlugin
-    fp4GemmPlugin
     quantizePerTokenPlugin
     quantizeTensorPlugin
-    quantizeToFP4Plugin
     layernormQuantizationPlugin
     rmsnormQuantizationPlugin
     weightOnlyGroupwiseQuantMatmulPlugin
@@ -81,6 +79,14 @@ set(PLUGIN_LISTS
     qserveGemmPlugin
     cudaStreamPlugin
     gemmAllReducePlugin)
+
+# FP4 plugins require TensorRT 10.8+ with kFP4 DataType support
+if(TRTLLM_HAS_FP4)
+  list(APPEND PLUGIN_LISTS fp4GemmPlugin quantizeToFP4Plugin)
+  message(STATUS "Building FP4 plugins: fp4GemmPlugin, quantizeToFP4Plugin")
+else()
+  message(STATUS "Skipping FP4 plugins (TensorRT < 10.8)")
+endif()
 
 foreach(PLUGIN_ITER ${PLUGIN_LISTS})
   include_directories(${PLUGIN_ITER})

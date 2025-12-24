@@ -1,0 +1,127 @@
+# Requirements for TensorRT-LLM on Jetson AGX Orin (aarch64)
+# CUDA 12.6, TensorRT 10.7.0, Python 3.12
+#
+# ============================================================================
+# IMPORTANT: Pre-installation of Local Wheels Required
+# ============================================================================
+# The following packages MUST be installed from local wheels BEFORE installing
+# tensorrt_llm, as they are not available on PyPI for aarch64:
+#
+#   pip install /path/to/torch-2.9.1-cp312-cp312-linux_aarch64.whl
+#   pip install /path/to/tensorrt-10.7.0-cp312-none-linux_aarch64.whl  
+#   pip install /path/to/triton-3.5.1-cp312-cp312-linux_aarch64.whl
+#   pip install /path/to/flashinfer_python-0.5.3-py3-none-any.whl
+#
+# Then install tensorrt_llm:
+#   pip install tensorrt_llm-1.2.0rc6-cp312-cp312-linux_aarch64.whl
+# ============================================================================
+
+# ============================================================================
+# Core ML Dependencies (from pip)
+# ============================================================================
+accelerate>=1.7.0
+colored
+diffusers>=0.27.0
+einops
+lark
+mpi4py
+numpy<2
+peft
+psutil
+sentencepiece>=0.1.99
+transformers==4.57.1
+
+# ============================================================================
+# CUDA/TensorRT Dependencies
+# ============================================================================
+cuda-python>=13
+nvidia-ml-py>=13
+nvtx
+
+# Note: These packages are x86-only on PyPI, skip on Jetson:
+# - nvidia-nccl-cu13 (use system NCCL from JetPack)
+# - nvidia-cuda-nvrtc (use system CUDA from JetPack)
+
+# ============================================================================
+# ONNX Dependencies
+# ============================================================================
+onnx>=1.18.0,<1.20.0
+onnx_graphsurgeon>=0.5.2
+
+# ============================================================================
+# Data Processing
+# ============================================================================
+datasets>=3.1.0
+h5py>=3.12.1
+pandas
+pillow
+
+# ============================================================================
+# Utilities
+# ============================================================================
+StrEnum
+aenum
+blake3
+click
+click_option_group
+mpmath>=1.3.0
+omegaconf
+ordered-set
+packaging
+pydantic>=2.9.1
+pydantic-settings[yaml]
+pyzmq
+regex
+safetensors
+soundfile
+tqdm
+
+# ============================================================================
+# Model Optimization
+# ============================================================================
+nvidia-modelopt[torch]>=0.37.0
+
+# ============================================================================
+# Grammar/Guided Decoding
+# ============================================================================
+xgrammar==0.1.25
+llguidance>=1.0.0
+
+# ============================================================================
+# Web Server (optional, for serving)
+# ============================================================================
+aiohttp
+fastapi>=0.120.1
+starlette>=0.49.1
+uvicorn
+prometheus_client
+prometheus_fastapi_instrumentator
+
+# ============================================================================
+# Build Tools
+# ============================================================================
+build
+wheel<=0.45.1
+setuptools<80
+ninja
+meson
+patchelf
+
+# ============================================================================
+# Additional Dependencies
+# ============================================================================
+huggingface_hub>=0.20.0
+tokenizers>=0.15.0
+torchvision>=0.19.0
+scipy
+
+# ============================================================================
+# Optional Dependencies (may need source build on aarch64)
+# ============================================================================
+# opencv-python-headless  # May need source build
+# tiktoken                # May need source build
+# blobfile
+# plotly
+# numexpr<2.14.0
+# partial_json_parser
+# torchao>=0.14.1         # May need source build

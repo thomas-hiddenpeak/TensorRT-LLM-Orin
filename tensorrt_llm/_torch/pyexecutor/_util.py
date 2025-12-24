@@ -523,7 +523,10 @@ def _create_kv_cache_manager(
         kv_cache_dtype = tensorrt_llm.bindings.DataType.FP8
     elif quant_config is not None and quant_config.quant_mode.has_fp4_kv_cache(
     ):
-        kv_cache_dtype = tensorrt_llm.bindings.DataType.NVFP4
+        if hasattr(tensorrt_llm.bindings.DataType, 'NVFP4'):
+            kv_cache_dtype = tensorrt_llm.bindings.DataType.NVFP4
+        else:
+            raise RuntimeError("NVFP4 KV cache requires TensorRT 10.8+ and CUDA 12.8+")
     else:
         kv_cache_dtype = str_dtype_to_binding(
             torch_dtype_to_str(model_engine.dtype))

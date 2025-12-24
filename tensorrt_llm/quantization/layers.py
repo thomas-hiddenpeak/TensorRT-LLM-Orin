@@ -20,7 +20,8 @@ import tensorrt as trt
 import torch
 
 from .._common import default_net, precision
-from .._utils import is_same_dtype, str_dtype_to_torch, trt_dtype_to_torch
+from .._utils import (TRT_FP4_DTYPE, TRT_HAS_FP4, is_same_dtype,
+                      str_dtype_to_torch, trt_dtype_to_torch)
 from ..functional import (ACT2FN, AllReduceFusionOp, AllReduceParams,
                           AttentionMaskType, PositionEmbeddingType,
                           RotaryScalingType, Tensor, allgather, allreduce, cast,
@@ -2109,7 +2110,7 @@ class FP4Linear(Linear):
             "Input features must be a multiple of 16 for FP4 GEMM"
 
         self.weight = Parameter(shape=(self.out_features, self.in_features),
-                                dtype=trt.fp4)
+                                dtype=TRT_FP4_DTYPE)
         self.weights_block_scaling_factor = Parameter(
             shape=(self.out_features,
                    self.in_features // self.scaling_vector_size),
@@ -2272,7 +2273,7 @@ class FP4RowLinear(RowLinear):
         assert self.in_features % self.scaling_vector_size == 0, \
             "Input features must be a multiple of 16 for FP4 GEMM"
         self.weight = Parameter(shape=(self.out_features, self.in_features),
-                                dtype=trt.fp4)
+                                dtype=TRT_FP4_DTYPE)
         self.weights_block_scaling_factor = Parameter(
             shape=(self.out_features,
                    self.in_features // self.scaling_vector_size),

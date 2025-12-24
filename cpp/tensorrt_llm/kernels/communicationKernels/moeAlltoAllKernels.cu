@@ -32,6 +32,17 @@ namespace kernels::moe_comm
 #define ENABLE_DEBUG_PRINT 0
 #define DISABLE_SYNC_FOR_PROFILING 0
 
+// Compatibility macros for fence instructions
+// fence.acquire.sys and fence.release.sys require SM90+
+#if __CUDA_ARCH__ >= 900
+#define FENCE_RELEASE_SYS() asm volatile("fence.release.sys;")
+#define FENCE_ACQUIRE_SYS() asm volatile("fence.acquire.sys;")
+#else
+// For older architectures, use __threadfence_system() as a fallback
+#define FENCE_RELEASE_SYS() __threadfence_system()
+#define FENCE_ACQUIRE_SYS() __threadfence_system()
+#endif
+
 // Macros for concise launch-time specialization
 #define SWITCH_BOOL(flag, NAME, ...)                                                                                   \
     if (flag)                                                                                                          \
@@ -487,7 +498,7 @@ __global__ void moeA2ADispatchKernel(int32_t const* token_selected_experts, // [
 #if !DISABLE_SYNC_FOR_PROFILING
             uint32_t expected_value = *ptrs.flag_val;
 
-            asm volatile("fence.release.sys;");
+            FENCE_RELEASE_SYS();
 #pragma unroll 1 // No unroll as one iter is typically enough
             for (int target_rank = lane_id; target_rank < ep_size; target_rank += warpSize)
             {
@@ -982,7 +993,7 @@ __global__ void moeA2ACombineKernel(
                 flag_set = flag_value == expected_value;
             } while (!flag_set);
         }
-        asm volatile("fence.acquire.sys;");
+        FENCE_ACQUIRE_SYS();
     }
     __syncthreads();
 #endif

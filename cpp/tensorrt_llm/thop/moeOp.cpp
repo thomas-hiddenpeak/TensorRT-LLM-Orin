@@ -108,7 +108,7 @@ public:
         }
         else if (isInt4Quant())
         {
-#ifdef ENABLE_FP8
+#if defined(ENABLE_FP8) && defined(ENABLE_FP4)
             if (mUseW4GroupScaling)
             {
                 return std::make_unique<
@@ -204,7 +204,7 @@ public:
             }
             switch (mActivationDtype)
             {
-#ifdef ENABLE_FP8
+#if defined(ENABLE_FP8) && defined(ENABLE_FP4)
             case c10::ScalarType::Float8_e4m3fn:
             {
                 if (isInt4Quant() and mUseW4GroupScaling)

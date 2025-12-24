@@ -178,7 +178,6 @@ set(TRTLLM_LINK_LIBS
     ${TRT_LIB}
     common_src
     kernels_src
-    flash_mla_src
     context_attention_src
     decoder_attention_src
     trtllm_gen_fmha
@@ -192,6 +191,7 @@ set(TRTLLM_LINK_LIBS
     # moe_gemm_src
     fb_gemm_src
     gemm_swiglu_sm90_src
+    fused_gated_gemm_stub
     cutlass_src
     cute_dsl_src
     layers_src
@@ -250,11 +250,17 @@ set_target_properties(
 
 target_link_libraries(${SHARED_TARGET} PUBLIC ${TRTLLM_LINK_LIBS})
 
+# Conditionally include fp8_blockscale_gemm_src if available
+set(OPTIONAL_WHOLE_ARCHIVE_LIBS)
+if(TARGET fp8_blockscale_gemm_src)
+  list(APPEND OPTIONAL_WHOLE_ARCHIVE_LIBS $<LINK_LIBRARY:WHOLE_ARCHIVE,fp8_blockscale_gemm_src>)
+endif()
+
 target_link_libraries(
   ${SHARED_TARGET}
   PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,${BATCH_MANAGER_TARGET}>
           $<LINK_LIBRARY:WHOLE_ARCHIVE,${EXECUTOR_TARGET}>
-          $<LINK_LIBRARY:WHOLE_ARCHIVE,fp8_blockscale_gemm_src>
+          ${OPTIONAL_WHOLE_ARCHIVE_LIBS}
           $<LINK_LIBRARY:WHOLE_ARCHIVE,${INTERNAL_CUTLASS_KERNELS_TARGET}>)
 
 # Link kernel_src and cutlass_src. static internal cutlass lib overridden.

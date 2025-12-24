@@ -120,7 +120,10 @@ void KVCacheTransferManager::copyBlock(BlockPtr const& src, BlockPtr const& dst,
             // If no partial tokens or if the dataType is not supported for partial copy, copy entire block.
             // Note that nvfp4 kv cache SFs use an interleaved layout, so we need to copy the entire block.
             if (numTokensToCopy <= 0 || srcPtr->getDataType() == nvinfer1::DataType::kINT4
-                || srcPtr->getDataType() == nvinfer1::DataType::kFP4 || containsBlockScales)
+#ifdef ENABLE_FP4
+                || srcPtr->getDataType() == nvinfer1::DataType::kFP4
+#endif
+                || containsBlockScales)
             {
                 // For partial copy not implemented with these data types,
                 // just do a full copy.

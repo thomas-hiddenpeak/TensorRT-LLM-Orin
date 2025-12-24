@@ -32,9 +32,8 @@
 
 #include "./common.h"
 
-#ifdef ENABLE_FP4
-#include <cuda_fp4.h>
-#endif
+// Include FP4 compatibility header - provides stub types for CUDA < 12.8
+#include "tensorrt_llm/common/fp4_compat.h"
 
 TRTLLM_NAMESPACE_BEGIN
 

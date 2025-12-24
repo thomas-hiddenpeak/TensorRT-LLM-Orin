@@ -17,6 +17,7 @@
 
 #pragma once
 
+#ifndef NVTX_DISABLE
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-braces"
@@ -25,6 +26,21 @@
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
+#else
+// Stub nvtx3 types when NVTX is disabled
+namespace nvtx3 {
+struct color {
+    unsigned int value;
+    constexpr color(unsigned int v = 0) : value(v) {}
+};
+template<typename Tag = void>
+struct scoped_range {
+    template<typename... Args>
+    scoped_range(Args&&...) {}
+};
+}
+#endif
+
 #include "tensorrt_llm/common/config.h"
 
 #include <array>
@@ -55,3 +71,9 @@ TRTLLM_NAMESPACE_END
 #define NVTX3_SCOPED_RANGE_WITH_NAME(range, name)                                                                      \
     ::nvtx3::scoped_range range(::tensorrt_llm::common::nvtx::nextColor(), name)
 #define NVTX3_SCOPED_RANGE(range) NVTX3_SCOPED_RANGE_WITH_NAME(range##_range, #range)
+
+#ifdef NVTX_DISABLE
+#define NVTX3_FUNC_RANGE() do {} while(0)
+#else
+#define NVTX3_FUNC_RANGE() NVTX3_SCOPED_RANGE(__func__)
+#endif

@@ -352,6 +352,7 @@ Tensor pack_int8_tensor_to_packed_int4(Tensor weight)
     return packed_weight;
 }
 
+#ifdef ENABLE_FP4
 Tensor mxfp4_dequantize_unswizzled(Tensor weight, Tensor scale, int64_t group_size)
 {
     // weight (n, k / 2)
@@ -400,6 +401,7 @@ Tensor mxfp4_dequantize_unswizzled(Tensor weight, Tensor scale, int64_t group_si
 
     return dequant_weight;
 }
+#endif // ENABLE_FP4
 
 } // namespace torch_ext
 
@@ -436,5 +438,7 @@ static auto permute_B_rows_for_mixed_gemm = torch::RegisterOperators(
 static auto subbyte_transpose
     = torch::RegisterOperators("trtllm::_subbyte_transpose", &tensorrt_llm::torch_ext::subbyte_transpose);
 
+#ifdef ENABLE_FP4
 static auto mxfp4_dequantize_unswizzled = torch::RegisterOperators(
     "trtllm::mxfp4_dequantize_unswizzled", &tensorrt_llm::torch_ext::mxfp4_dequantize_unswizzled);
+#endif // ENABLE_FP4

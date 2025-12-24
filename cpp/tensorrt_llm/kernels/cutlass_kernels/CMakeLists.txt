@@ -30,7 +30,7 @@ endif()
 set(cutlass_source_dir ${CMAKE_BINARY_DIR}/_deps/cutlass-src)
 execute_process(
   WORKING_DIRECTORY ${cutlass_source_dir}/python/
-  COMMAND ${Python3_EXECUTABLE} setup_library.py develop --user
+  COMMAND ${Python3_EXECUTABLE} setup_library.py develop
   RESULT_VARIABLE _CUTLASS_LIBRARY_SUCCESS)
 
 if(NOT _CUTLASS_LIBRARY_SUCCESS EQUAL 0)
@@ -163,7 +163,17 @@ file(GLOB_RECURSE GROUPED_SRC_CU moe_gemm/*.cu)
 file(GLOB_RECURSE FBGEMM_SRC_CU fp8_rowwise_gemm/*.cu)
 
 # Get the sources for FP8 Blockwise GEMM launchers
-file(GLOB_RECURSE FP8_BLOCKSCALE_GEMM_SRC_CU fp8_blockscale_gemm/*.cu)
+# FP8 Blockscale GEMM uses deep_gemm which requires CUDA 12.8+ APIs (cudaLaunchKernelEx with kernel type template)
+if(${CUDAToolkit_VERSION} VERSION_GREATER_EQUAL "12.8")
+  file(GLOB_RECURSE FP8_BLOCKSCALE_GEMM_SRC_CU fp8_blockscale_gemm/*.cu)
+  list(FILTER FP8_BLOCKSCALE_GEMM_SRC_CU EXCLUDE REGEX ".*_stub\\.cu$")
+  set(BUILD_FP8_BLOCKSCALE_GEMM ON)
+else()
+  # Use stub implementation for CUDA < 12.8 to satisfy linker requirements from prebuilt libraries
+  set(FP8_BLOCKSCALE_GEMM_SRC_CU "${CMAKE_CURRENT_SOURCE_DIR}/fp8_blockscale_gemm/fp8_blockscale_gemm_stub.cu")
+  set(BUILD_FP8_BLOCKSCALE_GEMM OFF)
+  message(STATUS "CUDA ${CUDAToolkit_VERSION} < 12.8: using fp8_blockscale_gemm stub (requires newer cudaLaunchKernelEx API)")
+endif()
 
 # Get the sources for FP4 GEMM launchers
 file(GLOB_RECURSE FP4_SRC_CU fp4_gemm/*.cu)
@@ -205,17 +215,33 @@ add_cuda_architectures(fpA_intB_gemm_src 89)
 add_instantiations(fpA_intB_gemm_src ${INSTANTIATION_GENERATION_DIR}/gemm)
 
 add_library(fb_gemm_src STATIC ${FBGEMM_SRC_CU} ${FBGEMM_CU_INSTANTIATIONS})
-set_cuda_architectures(fb_gemm_src 89 90 100f 120f)
+# Only build for SM89 (Ada Lovelace), skip SM90+ as we're targeting SM87
+set_cuda_architectures(fb_gemm_src 89)
 # add_instantiations(fb_gemm_src
 # ${INSTANTIATION_GENERATION_DIR}/fp8_rowwise_gemm)
 
-add_library(fp8_blockscale_gemm_src STATIC ${FP8_BLOCKSCALE_GEMM_SRC_CU})
-set_cuda_architectures(fp8_blockscale_gemm_src 89 90 100f 120f)
+if(BUILD_FP8_BLOCKSCALE_GEMM)
+  add_library(fp8_blockscale_gemm_src STATIC ${FP8_BLOCKSCALE_GEMM_SRC_CU})
+  # Only build for SM89, skip SM90+ as we're targeting SM87
+  set_cuda_architectures(fp8_blockscale_gemm_src 89)
+else()
+  # Build stub implementation to satisfy linker requirements from prebuilt internal_cutlass_kernels
+  add_library(fp8_blockscale_gemm_src STATIC ${FP8_BLOCKSCALE_GEMM_SRC_CU})
+  add_cuda_architectures(fp8_blockscale_gemm_src 89)
+endif()
 
+# gemm_swiglu_sm90 requires SM90 (Hopper), create stub for SM87 builds
+# The actual kernel file uses Hopper-specific features that won't compile on SM87
+# Also create stub for CutlassFusedGatedGemmRunner to satisfy linker requirements
 set(GEMM_SWIGLU_SM90_SRC_CU
-    ${CMAKE_CURRENT_SOURCE_DIR}/fused_gated_gemm/gemm_swiglu_e4m3.cu)
+    ${CMAKE_CURRENT_SOURCE_DIR}/fused_gated_gemm/empty_stub.cpp)
 add_library(gemm_swiglu_sm90_src STATIC ${GEMM_SWIGLU_SM90_SRC_CU})
-set_cuda_architectures(gemm_swiglu_sm90_src 90)
+message(STATUS "SM87 build: gemm_swiglu_sm90_src disabled (requires SM90+)")
+
+# Build stub for CutlassFusedGatedGemmRunner<__nv_fp8_e4m3> to satisfy plugin linker requirements
+add_library(fused_gated_gemm_stub STATIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/fused_gated_gemm/fused_gated_gemm_stub.cu)
+add_cuda_architectures(fused_gated_gemm_stub 87)
 
 if(USING_OSS_CUTLASS_LOW_LATENCY_GEMM)
   file(GLOB LOW_LATENCY_GEMM_SRC_CU
@@ -238,39 +264,69 @@ if(USING_OSS_CUTLASS_MOE_GEMM)
   set(MOE_GEMM_SRC_CU_LAUNCHER ${MOE_GEMM_SRC_CU})
   list(FILTER MOE_GEMM_SRC_CU_LAUNCHER EXCLUDE REGEX ".*moe_gemm_kernels_.*")
   list(FILTER MOE_GEMM_SRC_CU INCLUDE REGEX ".*moe_gemm_kernels_.*")
-  set(MOE_GEMM_SRC_CU_HOPPER_FP4 ${MOE_GEMM_SRC_CU})
-  list(FILTER MOE_GEMM_SRC_CU_HOPPER_FP4 INCLUDE REGEX
-       ".*moe_gemm_kernels_(bf16|fp16)_fp4.*")
-  list(FILTER MOE_GEMM_SRC_CU EXCLUDE REGEX
-       ".*moe_gemm_kernels_(bf16|fp16)_fp4.*")
-  set(MOE_GEMM_SRC_CU_FP4 ${MOE_GEMM_SRC_CU})
-  list(FILTER MOE_GEMM_SRC_CU_FP4 INCLUDE REGEX ".*fp4.*")
-  list(FILTER MOE_GEMM_SRC_CU EXCLUDE REGEX ".*fp4.*")
+  
+  # FP4 MOE requires CUDA 12.8+ for __nv_fp4_e2m1 type
+  if(${CUDAToolkit_VERSION} VERSION_GREATER_EQUAL "12.8")
+    set(MOE_GEMM_SRC_CU_HOPPER_FP4 ${MOE_GEMM_SRC_CU})
+    list(FILTER MOE_GEMM_SRC_CU_HOPPER_FP4 INCLUDE REGEX
+         ".*moe_gemm_kernels_(bf16|fp16)_fp4.*")
+    list(FILTER MOE_GEMM_SRC_CU EXCLUDE REGEX
+         ".*moe_gemm_kernels_(bf16|fp16)_fp4.*")
+    set(MOE_GEMM_SRC_CU_FP4 ${MOE_GEMM_SRC_CU})
+    list(FILTER MOE_GEMM_SRC_CU_FP4 INCLUDE REGEX ".*fp4.*")
+    list(FILTER MOE_GEMM_SRC_CU EXCLUDE REGEX ".*fp4.*")
+    set(BUILD_MOE_FP4 ON)
+  else()
+    # Skip FP4 MOE kernels for CUDA < 12.8
+    list(FILTER MOE_GEMM_SRC_CU EXCLUDE REGEX ".*fp4.*")
+    set(BUILD_MOE_FP4 OFF)
+    message(STATUS "CUDA ${CUDAToolkit_VERSION} < 12.8: skipping MOE FP4 kernels")
+  endif()
+  
   set(MOE_GEMM_SRC_CU_FP8 ${MOE_GEMM_SRC_CU})
   list(FILTER MOE_GEMM_SRC_CU_FP8 INCLUDE REGEX ".*fp8.*")
   list(FILTER MOE_GEMM_SRC_CU EXCLUDE REGEX ".*fp8.*")
 
   add_library(moe_gemm_src STATIC ${MOE_GEMM_SRC_CU} ${GROUPED_SRC_CPP})
 
+  # Pass BUILD_FP8_BLOCKSCALE_GEMM to moe_gemm_src for conditional compilation
+  if(BUILD_FP8_BLOCKSCALE_GEMM)
+    target_compile_definitions(moe_gemm_src PRIVATE BUILD_FP8_BLOCKSCALE_GEMM)
+  endif()
+
   add_library(_moe_gemm_launcher OBJECT ${MOE_GEMM_SRC_CU_LAUNCHER})
   add_cuda_architectures(_moe_gemm_launcher 89)
+  # Pass BUILD_FP8_BLOCKSCALE_GEMM to _moe_gemm_launcher for conditional compilation
+  if(BUILD_FP8_BLOCKSCALE_GEMM)
+    target_compile_definitions(_moe_gemm_launcher PRIVATE BUILD_FP8_BLOCKSCALE_GEMM)
+  endif()
 
-  add_library(_moe_gemm_hopper_fp4 OBJECT ${MOE_GEMM_SRC_CU_HOPPER_FP4})
-  set_cuda_architectures(_moe_gemm_hopper_fp4 90)
-  process_target(_moe_gemm_hopper_fp4 true false)
+  if(BUILD_MOE_FP4)
+    add_library(_moe_gemm_hopper_fp4 OBJECT ${MOE_GEMM_SRC_CU_HOPPER_FP4})
+    set_cuda_architectures(_moe_gemm_hopper_fp4 90)
+    process_target(_moe_gemm_hopper_fp4 true false)
 
-  add_library(_moe_gemm_fp4 OBJECT ${MOE_GEMM_SRC_CU_FP4})
-  set_cuda_architectures(_moe_gemm_fp4 100f 103 120f)
-  process_target(_moe_gemm_fp4 false true)
+    add_library(_moe_gemm_fp4 OBJECT ${MOE_GEMM_SRC_CU_FP4})
+    set_cuda_architectures(_moe_gemm_fp4 100f 103 120f)
+    process_target(_moe_gemm_fp4 false true)
+  endif()
 
   add_library(_moe_gemm_fp8 OBJECT ${MOE_GEMM_SRC_CU_FP8})
-  set_cuda_architectures(_moe_gemm_fp8 89 90 100f 120f)
-  process_target(_moe_gemm_fp8 true true)
+  # Only build for SM89, skip SM90+ as we're targeting SM87
+  set_cuda_architectures(_moe_gemm_fp8 89)
+  process_target(_moe_gemm_fp8 false false)
 
   add_instantiations(moe_gemm_src ${INSTANTIATION_GENERATION_DIR}/gemm_grouped)
-  target_link_libraries(
-    moe_gemm_src PRIVATE _moe_gemm_launcher _moe_gemm_hopper_fp4 _moe_gemm_fp4
-                         _moe_gemm_fp8)
+  
+  if(BUILD_MOE_FP4)
+    target_link_libraries(
+      moe_gemm_src PRIVATE _moe_gemm_launcher _moe_gemm_hopper_fp4 _moe_gemm_fp4
+                           _moe_gemm_fp8)
+  else()
+    target_link_libraries(
+      moe_gemm_src PRIVATE _moe_gemm_launcher _moe_gemm_fp8)
+  endif()
+  
   target_include_directories(
     moe_gemm_src
     PUBLIC ${PROJECT_SOURCE_DIR}/tensorrt_llm/cutlass_extensions/include)
@@ -293,7 +349,7 @@ endif()
 set(ALL_KERNELS_LIB)
 
 set(TARGET_LIB
-    fpA_intB_gemm_src;fb_gemm_src;fp8_blockscale_gemm_src;gemm_swiglu_sm90_src)
+    fpA_intB_gemm_src;fb_gemm_src;gemm_swiglu_sm90_src;fp8_blockscale_gemm_src)
 if(USING_OSS_CUTLASS_LOW_LATENCY_GEMM)
   list(APPEND TARGET_LIB low_latency_gemm_src)
 endif()

@@ -860,9 +860,14 @@ private:
         }
         case AllReduceFusionOp::RESIDUAL_RMS_NORM_QUANT_NVFP4:
         {
+#ifdef ENABLE_FP4
             auto [quant_out, scale_out]
                 = torch_ext::fp4_quantize(norm_out, scale.value(), sf_vecsize, sf_use_ue8m0, is_sf_swizzled_layout);
             return {quant_out, scale_out, reduce_output};
+#else
+            TORCH_CHECK(false, "NVFP4 quantization is not supported on this platform (requires CUDA 12.8+)");
+            return {};
+#endif
         }
         case AllReduceFusionOp::RESIDUAL_RMS_NORM_OUT_QUANT_FP8:
         {
@@ -871,9 +876,14 @@ private:
         }
         case AllReduceFusionOp::RESIDUAL_RMS_NORM_OUT_QUANT_NVFP4:
         {
+#ifdef ENABLE_FP4
             auto [quant_out, scale_out]
                 = torch_ext::fp4_quantize(norm_out, scale.value(), sf_vecsize, sf_use_ue8m0, is_sf_swizzled_layout);
             return {norm_out, quant_out, scale_out, reduce_output};
+#else
+            TORCH_CHECK(false, "NVFP4 quantization is not supported on this platform (requires CUDA 12.8+)");
+            return {};
+#endif
         }
         default: break;
         }

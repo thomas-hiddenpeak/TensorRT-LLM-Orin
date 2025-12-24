@@ -15,14 +15,14 @@
  */
 #include "tensorrt_llm/common/config.h"
 #include "tensorrt_llm/common/cudaUtils.h"
-#include "tensorrt_llm/kernels/cutlass_kernels/fp8_blockscale_gemm/fp8_blockscale_gemm.h"
-#include "tensorrt_llm/kernels/trtllmGenKernels/gemm/KernelRunner.h"
-
 #include "tensorrt_llm/thop/thUtils.h"
 
 #include <ATen/cuda/EmptyTensor.h>
-
 #include <optional>
+
+#ifdef ENABLE_FP8_BLOCKSCALE_GEMM
+#include "tensorrt_llm/kernels/cutlass_kernels/fp8_blockscale_gemm/fp8_blockscale_gemm.h"
+#include "tensorrt_llm/kernels/trtllmGenKernels/gemm/KernelRunner.h"
 
 using namespace tensorrt_llm::kernels::fp8_blockscale_gemm;
 using namespace tensorrt_llm::kernels;
@@ -408,6 +408,47 @@ torch::Tensor fp8_block_scaling_bmm(torch::Tensor const& mat1, torch::Tensor con
 } // namespace torch_ext
 
 TRTLLM_NAMESPACE_END
+
+#else // ENABLE_FP8_BLOCKSCALE_GEMM not defined
+
+TRTLLM_NAMESPACE_BEGIN
+
+namespace torch_ext
+{
+
+torch::Tensor fp8_block_scaling_gemm(torch::Tensor const& mat1, torch::Tensor const& mat2,
+    torch::Tensor const& mat1Scale, torch::Tensor const& mat2Scale)
+{
+    TORCH_CHECK(false, "FP8 Block Scale GEMM is not supported on this platform (requires CUDA 12.8+)");
+    return torch::Tensor();
+}
+
+torch::Tensor fp8_block_scaling_bmm(torch::Tensor const& mat1, torch::Tensor const& mat2,
+    torch::Tensor const& mat1Scale, torch::Tensor const& mat2Scale, std::optional<c10::ScalarType> out_dtype)
+{
+    TORCH_CHECK(false, "FP8 Block Scale BMM is not supported on this platform (requires CUDA 12.8+)");
+    return torch::Tensor();
+}
+
+torch::Tensor fp8_block_scaling_bmm_out(torch::Tensor const& mat1, torch::Tensor const& mat2,
+    torch::Tensor const& mat1Scale, torch::Tensor const& mat2Scale, torch::Tensor& out)
+{
+    TORCH_CHECK(false, "FP8 Block Scale BMM is not supported on this platform (requires CUDA 12.8+)");
+    return out;
+}
+
+torch::Tensor fp8_block_scaling_moe_gemm(torch::Tensor const& mat1, torch::Tensor const& mat2,
+    torch::Tensor const& mat1Scale, torch::Tensor const& mat2Scale, torch::Tensor const& token_offset)
+{
+    TORCH_CHECK(false, "FP8 Block Scale MOE GEMM is not supported on this platform (requires CUDA 12.8+)");
+    return torch::Tensor();
+}
+
+} // namespace torch_ext
+
+TRTLLM_NAMESPACE_END
+
+#endif // ENABLE_FP8_BLOCKSCALE_GEMM
 
 TORCH_LIBRARY_FRAGMENT(trtllm, m)
 {

@@ -19,6 +19,15 @@ cmake_minimum_required(VERSION 3.27 FATAL_ERROR)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Enable ccache if available for faster rebuilds
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+  message(STATUS "Found ccache: ${CCACHE_PROGRAM} - enabling compiler cache")
+  set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+  set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+  set(CMAKE_CUDA_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+endif()
+
 include(resolve_dirs)
 include(parse_make_options)
 include(cuda_configuration)
@@ -30,9 +39,11 @@ project(tensorrt_llm LANGUAGES CXX)
 option(BUILD_PYT "Build in PyTorch TorchScript class mode" ON)
 option(BUILD_TESTS "Build Google tests" ON)
 option(BUILD_BENCHMARKS "Build benchmarks" ON)
-option(BUILD_DEEP_EP "Build the Deep EP module" ON)
-option(BUILD_DEEP_GEMM "Build the DeepGEMM module" ON)
-option(BUILD_FLASH_MLA "Build the FlashMLA module" ON)
+option(BUILD_DEEP_EP "Build the Deep EP module" OFF)
+# DeepGEMM requires SM90+ (Hopper), disabled for SM87
+option(BUILD_DEEP_GEMM "Build the DeepGEMM module" OFF)
+# FlashMLA requires SM90+ (Hopper), disabled for SM87
+option(BUILD_FLASH_MLA "Build the FlashMLA module" OFF)
 option(BUILD_MICRO_BENCHMARKS "Build C++ micro benchmarks" OFF)
 option(NVTX_DISABLE "Disable all NVTX features" ON)
 option(WARNING_IS_ERROR "Treat all warnings as errors" OFF)
@@ -51,11 +62,13 @@ option(CUBLAS_DYNAMIC_LINKING
 option(CURAND_DYNAMIC_LINKING "Link against the dynamic curand library" ON)
 
 option(ENABLE_NVSHMEM "Enable building with NVSHMEM support" OFF)
+# Low Latency GEMM requires SM90+ (Hopper), disabled for SM87
 option(USING_OSS_CUTLASS_LOW_LATENCY_GEMM
-       "Using open sourced Cutlass low latency gemm kernel" ON)
+       "Using open sourced Cutlass low latency gemm kernel" OFF)
+# FP4 GEMM requires SM100+ (Blackwell) and CUDA 12.8+, disabled
 option(USING_OSS_CUTLASS_FP4_GEMM "Using open sourced Cutlass fp4 gemm kernel"
-       ON)
-option(ENABLE_CUBLASLT_FP4_GEMM "Enable cuBLASLt FP4 GEMM support" ON)
+       OFF)
+option(ENABLE_CUBLASLT_FP4_GEMM "Enable cuBLASLt FP4 GEMM support" OFF)
 if(NOT ${CUDAToolkit_VERSION} VERSION_GREATER_EQUAL "12.8")
   set(ENABLE_CUBLASLT_FP4_GEMM
       OFF
@@ -66,9 +79,26 @@ if(NOT ${CUDAToolkit_VERSION} VERSION_GREATER_EQUAL "12.8")
 endif()
 option(USING_OSS_CUTLASS_MOE_GEMM "Using open sourced Cutlass moe gemm kernel"
        ON)
+# AR GEMM requires SM90+ (Hopper) for NVLS support, disabled for SM87
 option(USING_OSS_CUTLASS_ALLREDUCE_GEMM
-       "Using open sourced Cutlass AR gemm kernel" ON)
+       "Using open sourced Cutlass AR gemm kernel" OFF)
 option(SKIP_SOFTMAX_STAT "Enable Statistics of Skip-Softmax" OFF)
+
+# Check if target architectures include SM90+, if not disable AR GEMM
+# AR GEMM requires SM90+ for NVLS support
+set(HAS_SM90_PLUS OFF)
+foreach(arch ${CMAKE_CUDA_ARCHITECTURES})
+  string(REGEX MATCH "^([0-9]+)" arch_num "${arch}")
+  if(arch_num AND arch_num GREATER_EQUAL 90)
+    set(HAS_SM90_PLUS ON)
+    break()
+  endif()
+endforeach()
+if(NOT HAS_SM90_PLUS AND USING_OSS_CUTLASS_ALLREDUCE_GEMM)
+  set(USING_OSS_CUTLASS_ALLREDUCE_GEMM OFF CACHE BOOL
+      "Using open sourced Cutlass AR gemm kernel" FORCE)
+  message(STATUS "No SM90+ architecture found: disabling USING_OSS_CUTLASS_ALLREDUCE_GEMM")
+endif()
 
 message(STATUS "ENABLE_NVSHMEM is ${ENABLE_NVSHMEM}")
 
@@ -225,6 +255,16 @@ message(STATUS "    libraries: ${CUDAToolkit_LIBRARY_DIR}")
 message(STATUS "    include path: ${CUDAToolkit_INCLUDE_DIRS}")
 message(STATUS "CUDA_NVML_LIB: ${CUDA_NVML_LIB}")
 
+# Re-evaluate ENABLE_CUBLASLT_FP4_GEMM now that we have CUDAToolkit_VERSION
+if(NOT ${CUDAToolkit_VERSION} VERSION_GREATER_EQUAL "12.8")
+  set(ENABLE_CUBLASLT_FP4_GEMM
+      OFF
+      CACHE BOOL "" FORCE)
+  message(
+    STATUS
+      "CUDAToolkit_VERSION ${CUDAToolkit_VERSION} < 12.8, FP4 disabled")
+endif()
+
 # Prevent CMake from creating a response file for CUDA compiler, so clangd can
 # pick up on the includes
 set(CMAKE_CUDA_USE_RESPONSE_FILE_FOR_INCLUDES 0)
@@ -240,6 +280,36 @@ endif()
 # TRT dependencies
 find_package(TensorRT 10 REQUIRED COMPONENTS OnnxParser)
 set(TRT_LIB TensorRT::NvInfer)
+
+# Detect TensorRT version and set feature flags
+if(TensorRT_VERSION_STRING)
+  string(REPLACE "." ";" TRT_VERSION_LIST ${TensorRT_VERSION_STRING})
+  list(GET TRT_VERSION_LIST 0 TRT_VERSION_MAJOR)
+  list(GET TRT_VERSION_LIST 1 TRT_VERSION_MINOR)
+  message(STATUS "Detected TensorRT version: ${TensorRT_VERSION_STRING}")
+  
+  # FP4 support requires TensorRT 10.8+
+  if(TRT_VERSION_MAJOR GREATER 10 OR (TRT_VERSION_MAJOR EQUAL 10 AND TRT_VERSION_MINOR GREATER_EQUAL 8))
+    set(TRTLLM_HAS_FP4 ON)
+    message(STATUS "TensorRT FP4 support: enabled")
+  else()
+    set(TRTLLM_HAS_FP4 OFF)
+    message(STATUS "TensorRT FP4 support: disabled (requires TRT 10.8+)")
+  endif()
+  
+  # Weight Streaming V2 API requires TensorRT 10.8+
+  if(TRT_VERSION_MAJOR GREATER 10 OR (TRT_VERSION_MAJOR EQUAL 10 AND TRT_VERSION_MINOR GREATER_EQUAL 8))
+    set(TRTLLM_HAS_WEIGHT_STREAMING_V2 ON)
+    message(STATUS "TensorRT Weight Streaming V2: enabled")
+  else()
+    set(TRTLLM_HAS_WEIGHT_STREAMING_V2 OFF)
+    message(STATUS "TensorRT Weight Streaming V2: disabled (requires TRT 10.8+)")
+  endif()
+else()
+  message(WARNING "Could not detect TensorRT version, assuming latest features are available")
+  set(TRTLLM_HAS_FP4 ON)
+  set(TRTLLM_HAS_WEIGHT_STREAMING_V2 ON)
+endif()
 
 get_filename_component(TRT_LLM_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR} PATH)
 
@@ -304,10 +374,23 @@ if(${CUDAToolkit_VERSION} VERSION_GREATER_EQUAL "11.8")
 endif()
 
 if(${CUDAToolkit_VERSION} VERSION_GREATER_EQUAL "12.8")
-  add_definitions("-DENABLE_FP4")
+  # FP4 requires both CUDA 12.8+ and TensorRT 10.8+ (for kFP4 DataType)
+  if(TRTLLM_HAS_FP4)
+    add_definitions("-DENABLE_FP4")
+    message(
+      STATUS
+        "CUDAToolkit_VERSION ${CUDAToolkit_VERSION_MAJOR}.${CUDAToolkit_VERSION_MINOR} >= 12.8 and TensorRT >= 10.8, enable -DENABLE_FP4 flag"
+    )
+  else()
+    message(
+      STATUS
+        "CUDAToolkit_VERSION ${CUDAToolkit_VERSION_MAJOR}.${CUDAToolkit_VERSION_MINOR} >= 12.8 but TensorRT < 10.8, FP4 disabled due to missing kFP4 DataType"
+    )
+  endif()
+else()
   message(
     STATUS
-      "CUDAToolkit_VERSION ${CUDAToolkit_VERSION_MAJOR}.${CUDAToolkit_VERSION_MINOR} is greater or equal than 12.8, enable -DENABLE_FP4 flag"
+      "CUDAToolkit_VERSION ${CUDAToolkit_VERSION_MAJOR}.${CUDAToolkit_VERSION_MINOR} < 12.8, FP4 disabled"
   )
 endif()
 

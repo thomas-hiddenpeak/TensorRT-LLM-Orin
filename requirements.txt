@@ -1,4 +1,4 @@
---extra-index-url https://download.pytorch.org/whl/cu130
+# Commented for Jetson: --extra-index-url https://download.pytorch.org/whl/cu130
 -c constraints.txt
 accelerate>=1.7.0
 build
@@ -19,9 +19,12 @@ pandas
 h5py==3.12.1
 StrEnum
 sentencepiece>=0.1.99
-tensorrt~=10.13.3
+# TensorRT version: use ~=10.7.0 for Jetson AGX Orin with L4T 22.04
+# Original requirement was tensorrt~=10.13.3 for x86_64 with newer TRT
+tensorrt>=10.7.0
 # https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/rel-25-10.html#rel-25-10 uses 2.9.0a0.
-torch>=2.9.0a0,<=2.9.0
+# Modified for Jetson: allow torch 2.9.1
+torch>=2.9.0a0,<=2.9.1
 torchvision
 nvidia-modelopt[torch]~=0.37.0
 # https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/rel-25-10.html#rel-25-10 uses 2.27.7

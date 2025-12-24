@@ -565,6 +565,10 @@ FusedMultiHeadAttentionXMMAKernelV2 const* getXMMAKernelsV2(Data_type inputType,
     {
         sm = kSM_120;
     }
+    if (sm == kSM_87)
+    {
+        sm = kSM_86;
+    }
     return FusedMHAKernelFactoryV2::Get().getXMMAKernels(
         sMhaKernelMetaInfosV2, sMhaKernelMetaInfosV2Size, inputType, outputType, sm);
 }

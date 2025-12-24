@@ -23,7 +23,12 @@
 #include "tensorrt_llm/kernels/quantization.cuh"
 #include "tensorrt_llm/kernels/quantization.h"
 
+// cuda_fp4.h requires CUDA 12.8+, use our compatibility header
+#ifdef ENABLE_FP4
 #include <cuda_fp4.h>
+#else
+#include "tensorrt_llm/common/fp4_compat.h"
+#endif
 #include <cute/numeric/numeric_types.hpp>
 
 TRTLLM_NAMESPACE_BEGIN

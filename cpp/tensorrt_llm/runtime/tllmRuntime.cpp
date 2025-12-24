@@ -27,6 +27,7 @@
 
 #include "nlohmann/json.hpp"
 #include <NvInferRuntime.h>
+#include <NvInferVersion.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -74,8 +75,17 @@ std::vector<std::size_t> dimsToShape(nvinfer1::Dims const& dims)
 
 tensorrt_llm::runtime::TllmLogger defaultLogger{};
 
+// Weight streaming API is available in TensorRT 10.8+
+// For TensorRT 10.7 and earlier, this feature is not available
+#if NV_TENSORRT_MAJOR > 10 || (NV_TENSORRT_MAJOR == 10 && NV_TENSORRT_MINOR >= 8)
+#define TRTLLM_HAS_WEIGHT_STREAMING 1
+#else
+#define TRTLLM_HAS_WEIGHT_STREAMING 0
+#endif
+
 void setWeightStreaming(nvinfer1::ICudaEngine& engine, float const gpuWeightsPercent)
 {
+#if TRTLLM_HAS_WEIGHT_STREAMING
     if (gpuWeightsPercent < 1)
     {
         int64_t streamableSize = engine.getStreamableWeightsSize();
@@ -84,6 +94,13 @@ void setWeightStreaming(nvinfer1::ICudaEngine& engine, float const gpuWeightsPer
             gpuWeightsPercent, budget, 0, streamableSize);
         engine.setWeightStreamingBudgetV2(budget);
     }
+#else
+    if (gpuWeightsPercent < 1)
+    {
+        TLLM_LOG_WARNING("Weight streaming is not supported in TensorRT %d.%d. Ignoring gpuWeightsPercent setting.",
+            NV_TENSORRT_MAJOR, NV_TENSORRT_MINOR);
+    }
+#endif
 }
 
 class LayerInfo
@@ -262,11 +279,13 @@ nvinfer1::IExecutionContext& TllmRuntime::addContext(std::int32_t profileIndex)
     mContexts.emplace_back(mEngine->createExecutionContextWithoutDeviceMemory());
     if (!mContexts.back())
     {
+#if TRTLLM_HAS_WEIGHT_STREAMING
         if (mEngine->getStreamableWeightsSize() > 0)
         {
             TLLM_THROW("Failed to allocate memory for weights. Please try reducing --gpu_weights_percent.");
         }
         else
+#endif
         {
             TLLM_THROW("Internal Error: Failed to create an execution context.");
         }

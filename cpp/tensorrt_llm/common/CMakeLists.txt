@@ -40,3 +40,8 @@ set_property(TARGET common_src PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 if(ENABLE_CUBLASLT_FP4_GEMM)
   target_compile_definitions(common_src PRIVATE ENABLE_CUBLASLT_FP4_GEMM)
 endif()
+
+# Pass BUILD_FLASH_MLA to common_src for conditional compilation
+if(BUILD_FLASH_MLA)
+  target_compile_definitions(common_src PRIVATE BUILD_FLASH_MLA)
+endif()

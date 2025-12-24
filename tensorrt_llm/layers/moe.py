@@ -21,8 +21,8 @@ import tensorrt as trt
 import torch
 
 from tensorrt_llm._torch.utils import ActivationType
-from tensorrt_llm._utils import (get_init_params, str_dtype_to_torch,
-                                 str_dtype_to_trt)
+from tensorrt_llm._utils import (TRT_FP4_DTYPE, TRT_HAS_FP4, get_init_params,
+                                 str_dtype_to_torch, str_dtype_to_trt)
 from tensorrt_llm.layers.lora import LoraParams
 
 from .._common import default_net, default_trtnet
@@ -458,7 +458,7 @@ class MOEWeightWrapper(Module):
 
         if quant_mode.has_nvfp4():
             self.expert_shape = (experts_per_node, out_features, in_features)
-            weight_dtype = trt.fp4
+            weight_dtype = TRT_FP4_DTYPE
 
         if not quant_mode.has_per_group_scaling():
             self.weight = Parameter(shape=self.expert_shape,
@@ -1076,8 +1076,8 @@ class MixtureOfExperts(Module):
         elif self.quant_mode.has_nvfp4():
             # We pass through the weights unchanged, the quantization is done in the plugin
             hidden_states_quant = hidden_states
-            dtype_quant = trt.fp4
-            weight_dtype_quant = trt.fp4
+            dtype_quant = TRT_FP4_DTYPE
+            weight_dtype_quant = TRT_FP4_DTYPE
             output_dtype_quant = self.dtype
 
             scale_1 = div(1.0, self.fc.activation_global_scaling_factor.value)

@@ -17,6 +17,7 @@
 #include "tensorrt_llm/common/config.h"
 #include "tensorrt_llm/common/memoryUtils.h"
 #include "tensorrt_llm/common/workspace.h"
+#include "tensorrt_llm/common/dataType.h"
 #include <algorithm>
 #include <cuda.h>
 #include <cuda_fp16.h>
@@ -1381,6 +1382,10 @@ __global__ void expandInputRowsKernel(InputActivationsType const* unpermuted_inp
         && BlockScalingType == TmaWarpSpecializedGroupedGemmInput::FpXBlockScalingType::NVFP4 && !PRE_QUANT_AWQ;
     constexpr bool is_nvfp4_input = is_nvfp4 && std::is_same_v<InputActivationsType, __nv_fp4_e2m1>;
     constexpr bool need_nvfp4_quant = is_nvfp4 && !is_nvfp4_input;
+    // When FP4 is enabled, enforce the static_assert
+    static_assert(need_nvfp4_quant || need_mxfp8_quant || PRE_QUANT_AWQ
+            || std::is_same_v<InputActivationsType, ExpandedActivationsType>,
+        "Only NVFP4, MXFP8 and WINT4_AFP8 supports outputting a different format as part of the expansion");
 #else
     constexpr bool is_mxfp8 = false;
     constexpr bool is_mxfp8_input = false;
@@ -1388,11 +1393,10 @@ __global__ void expandInputRowsKernel(InputActivationsType const* unpermuted_inp
     constexpr bool is_nvfp4 = false;
     constexpr bool is_nvfp4_input = false;
     constexpr bool need_nvfp4_quant = false;
+    // When FP4 is disabled, allow same-type expansion and PRE_QUANT_AWQ only (MXFP8/NVFP4 are not available)
+    static_assert(PRE_QUANT_AWQ || std::is_same_v<InputActivationsType, ExpandedActivationsType>,
+        "Without FP4/MXFP8 support, only same-type expansion or AWQ pre-quant is supported");
 #endif
-
-    static_assert(need_nvfp4_quant || need_mxfp8_quant || PRE_QUANT_AWQ
-            || std::is_same_v<InputActivationsType, ExpandedActivationsType>,
-        "Only NVFP4, MXFP8 and WINT4_AFP8 supports outputting a different format as part of the expansion");
 
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
     asm volatile("griddepcontrol.wait;");
@@ -2509,8 +2513,10 @@ void dequantFP8(OutputType* output, InputType const* input, int64_t const* num_v
 
 template <class T, class WeightType, class OutputType, class InputType, class BackBoneType, class Enable>
 CutlassMoeFCRunner<T, WeightType, OutputType, InputType, BackBoneType, Enable>::CutlassMoeFCRunner()
+#ifdef BUILD_FP8_BLOCKSCALE_GEMM
     : blockscale_gemm_runner_{std::make_unique<
         kernels::fp8_blockscale_gemm::CutlassFp8BlockScaleGemmRunner<__nv_bfloat16, __nv_fp8_e4m3, __nv_bfloat16>>()}
+#endif
 {
 }
 
@@ -2810,11 +2816,16 @@ template <class T, class WeightType, class OutputType, class InputType, class Sc
 kernels::fp8_blockscale_gemm::CutlassFp8BlockScaleGemmRunnerInterface*
 CutlassMoeFCRunner<T, WeightType, OutputType, InputType, ScaleBiasType, Enable>::getDeepSeekBlockScaleGemmRunner() const
 {
+#ifdef BUILD_FP8_BLOCKSCALE_GEMM
     TLLM_CHECK_WITH_INFO((std::is_same_v<T, __nv_bfloat16> && std::is_same_v<OutputType, __nv_bfloat16>),
         "Block scale GEMM runner only supports BF16 A/output");
     TLLM_CHECK_WITH_INFO(
         (std::is_same_v<WeightType, __nv_fp8_e4m3>), "Block scale GEMM runner only supports FP8 weights.");
     return blockscale_gemm_runner_.get();
+#else
+    TLLM_THROW("FP8 Block Scale GEMM is not available (requires CUDA 12.8+)");
+    return nullptr;
+#endif
 }
 
 template <class T, class WeightType, class OutputType, class InputType, class ScaleBiasType, class Enable>
@@ -4092,8 +4103,8 @@ std::map<std::string, std::pair<size_t, size_t>> GemmProfilerBackend::getProfile
 
     TLLM_CHECK(mDType != nvinfer1::DataType::kINT4);
     // nvllm still uses int64 because torch doesn't have fp4 yet.
-    bool is_4bit_act = mDType == nvinfer1::DataType::kFP4 || mDType == nvinfer1::DataType::kINT64;
-    bool is_4bit_weight = mWType == nvinfer1::DataType::kINT4 || mWType == nvinfer1::DataType::kFP4
+    bool is_4bit_act = mDType == DATATYPE_KFP4 || mDType == nvinfer1::DataType::kINT64;
+    bool is_4bit_weight = mWType == nvinfer1::DataType::kINT4 || mWType == DATATYPE_KFP4
         || mWType == nvinfer1::DataType::kINT64;
     TLLM_CHECK_WITH_INFO(!is_4bit_act || is_4bit_weight, "Cannot have 4-bit activation with non-4-bit weight");
     float dtype_bytes = is_4bit_act
@@ -4149,8 +4160,8 @@ std::map<std::string, std::pair<size_t, size_t>> GemmProfilerBackend::getProfile
     bool is_fp8_act_quant = mDType == nvinfer1::DataType::kFP8;
     bool is_fp8_w_quant = mWType == nvinfer1::DataType::kFP8;
     // nvllm still uses int64 because torch doesn't have fp4 yet.
-    // bool is_fp4_act_quant = mDType == nvinfer1::DataType::kFP4 || mDType == nvinfer1::DataType::kINT64;
-    bool is_fp4_w_quant = mWType == nvinfer1::DataType::kFP4 || mWType == nvinfer1::DataType::kINT64;
+    // bool is_fp4_act_quant = mDType == DATATYPE_KFP4 || mDType == nvinfer1::DataType::kINT64;
+    bool is_fp4_w_quant = mWType == DATATYPE_KFP4 || mWType == nvinfer1::DataType::kINT64;
     bool is_w4afp8_quant = is_int_groupwise_w_quant && is_fp8_act_quant;
     // bool is_wfp4afp8_quant = is_fp4_w_quant && is_fp8_act_quant;
     bool is_wfp4a16_quant = (mDType == nvinfer1::DataType::kHALF || mDType == nvinfer1::DataType::kBF16)
@@ -4404,7 +4415,7 @@ void GemmProfilerBackend::prepareQuantParams(int num_tokens, char* workspace_ptr
             static_cast<float const*>(quant_3), static_cast<float const*>(quant_4));
     }
     else if (mDType == nvinfer1::DataType::kFP8
-        && (mWType == nvinfer1::DataType::kFP4 || mWType == nvinfer1::DataType::kINT64))
+        && (mWType == DATATYPE_KFP4 || mWType == nvinfer1::DataType::kINT64))
     {
         TLLM_CHECK(quant_1 && quant_2 && quant_3 && quant_4 && quant_5 && quant_6);
         mQuantParams = QuantParams::FP8MXFP4(static_cast<float const*>(quant_1),
@@ -4413,8 +4424,8 @@ void GemmProfilerBackend::prepareQuantParams(int num_tokens, char* workspace_ptr
             static_cast<TmaWarpSpecializedGroupedGemmInput::MXFPXElementSF const*>(quant_5),
             static_cast<float const*>(quant_6));
     }
-    else if ((mDType == nvinfer1::DataType::kFP4 || mDType == nvinfer1::DataType::kINT64)
-        && (mWType == nvinfer1::DataType::kFP4 || mWType == nvinfer1::DataType::kINT64))
+    else if ((mDType == DATATYPE_KFP4 || mDType == nvinfer1::DataType::kINT64)
+        && (mWType == DATATYPE_KFP4 || mWType == nvinfer1::DataType::kINT64))
     {
         // nvllm still uses int64 because torch doesn't have fp4 yet.
         TLLM_CHECK(quant_1 && quant_2 && quant_3 && quant_4 && quant_5 && quant_6);
@@ -4727,12 +4738,18 @@ template class CutlassMoeFCRunner<half, cutlass::uint4b_t>;
 #ifdef ENABLE_FP8
 // template class CutlassMoeFCRunner<__nv_fp8_e4m3, __nv_fp8_e4m3>;
 template class CutlassMoeFCRunner<__nv_fp8_e4m3, __nv_fp8_e4m3, half>;
+// FP8+uint4 with type conversion (half->fp8) requires MXFP8 which needs CUDA 12.8+
+#ifdef ENABLE_FP4
 template class CutlassMoeFCRunner<__nv_fp8_e4m3, cutlass::uint4b_t, half, half>;
+#endif
 #ifdef ENABLE_BF16
 template class CutlassMoeFCRunner<__nv_fp8_e4m3, __nv_fp8_e4m3, __nv_bfloat16>;
 template class CutlassMoeFCRunner<__nv_bfloat16, __nv_fp8_e4m3, __nv_bfloat16>;
+// FP8+uint4 with type conversion (bf16->fp8) requires MXFP8 which needs CUDA 12.8+
+#ifdef ENABLE_FP4
 template class CutlassMoeFCRunner<__nv_fp8_e4m3, cutlass::uint4b_t, __nv_bfloat16, __nv_bfloat16>;
 template class CutlassMoeFCRunner<__nv_fp8_e4m3, cutlass::uint4b_t, __nv_bfloat16, __nv_fp8_e4m3>;
+#endif
 #endif
 #endif
 #ifdef ENABLE_FP4

@@ -20,8 +20,8 @@ import torch
 import torch.nn.functional as F
 
 from .._common import default_net, default_trtnet
-from .._utils import (get_sm_version, str_dtype_to_np, str_dtype_to_trt,
-                      trt_dtype_to_np)
+from .._utils import (TRT_FP4_DTYPE, TRT_HAS_FP4, get_sm_version,
+                      str_dtype_to_np, str_dtype_to_trt, trt_dtype_to_np)
 from ..functional import (Tensor, _add_plugin_info, _create_tensor, cast, clip,
                           constant, flatten, layer_norm, matmul,
                           repeat_interleave, rms_norm, round, sum, view)
@@ -1398,7 +1398,7 @@ def dynamic_quantize(
         double_scale: Tensor,
         axis: int = -1,
         block_size: int = 16,
-        data_qtype: trt.DataType = trt.fp4,
+        data_qtype: trt.DataType = TRT_FP4_DTYPE if TRT_HAS_FP4 else trt.fp8,
         scale_qtype: trt.DataType = trt.fp8) -> Tuple[Tensor, Tensor]:
     '''
     Parameters:

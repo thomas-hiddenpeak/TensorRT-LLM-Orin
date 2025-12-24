@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+// FP8 Blockscale GEMM requires CUDA 12.8+ (cudaLaunchKernelEx API changes)
+#ifdef ENABLE_FP8_BLOCKSCALE_GEMM
+
 #include "tensorrt_llm/common/cudaUtils.h"
 #include "tensorrt_llm/kernels/cutlass_kernels/fp8_blockscale_gemm/fp8_blockscale_gemm.h"
 #include "tensorrt_llm/thop/thUtils.h"
@@ -150,3 +153,5 @@ TORCH_LIBRARY_IMPL(trtllm, CUDA, m)
     m.impl("fp8_quantize_1x128", &tensorrt_llm::torch_ext::fp8_quantize_1x128);
     m.impl("fp8_batched_quantize_1x128_permute102", &tensorrt_llm::torch_ext::fp8_batched_quantize_1x128_permute102);
 }
+
+#endif // ENABLE_FP8_BLOCKSCALE_GEMM

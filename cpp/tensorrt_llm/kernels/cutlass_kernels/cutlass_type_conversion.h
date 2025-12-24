@@ -28,8 +28,14 @@
 #include "cutlass/float8.h"
 #include <cuda_fp8.h>
 
+#if defined(ENABLE_FP4)
 #include "cutlass/float_subbyte.h"
+#ifdef ENABLE_FP4
 #include <cuda_fp4.h>
+#else
+#include "tensorrt_llm/common/fp4_compat.h"
+#endif
+#endif
 
 TRTLLM_NAMESPACE_BEGIN
 
@@ -64,11 +70,13 @@ struct CutlassType<nvinfer1::DataType::kFP8>
     using type = cutlass::float_e4m3_t;
 };
 
+#if defined(ENABLE_FP4)
 template <>
 struct CutlassType<nvinfer1::DataType::kFP4>
 {
     using type = cutlass::float_e2m1_t;
 };
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Tllm to Cutlass

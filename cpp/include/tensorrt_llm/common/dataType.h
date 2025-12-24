@@ -41,7 +41,9 @@ constexpr static size_t getDTypeSize(nvinfer1::DataType type)
     case nvinfer1::DataType::kINT8: [[fallthrough]];
     case nvinfer1::DataType::kFP8: return 1;
     case nvinfer1::DataType::kINT4: TLLM_THROW("Cannot determine size of INT4 data type");
+#ifdef ENABLE_FP4
     case nvinfer1::DataType::kFP4: TLLM_THROW("Cannot determine size of FP4 data type");
+#endif
     default: TLLM_THROW("Unknown dtype %d", static_cast<int>(type));
     }
     return 0;
@@ -60,8 +62,10 @@ constexpr static size_t getDTypeSizeInBits(nvinfer1::DataType type)
     case nvinfer1::DataType::kUINT8: [[fallthrough]];
     case nvinfer1::DataType::kINT8: [[fallthrough]];
     case nvinfer1::DataType::kFP8: return 8;
-    case nvinfer1::DataType::kINT4: [[fallthrough]];
+    case nvinfer1::DataType::kINT4: return 4;
+#ifdef ENABLE_FP4
     case nvinfer1::DataType::kFP4: return 4;
+#endif
     default: TLLM_THROW("Unknown dtype %d", static_cast<int>(type));
     }
     return 0;
@@ -81,7 +85,9 @@ constexpr static size_t getDTypeSizeInBits(nvinfer1::DataType type)
     case nvinfer1::DataType::kBF16: return "bf16"; break;
     case nvinfer1::DataType::kINT64: return "int64"; break;
     case nvinfer1::DataType::kINT4: return "int4"; break;
+#ifdef ENABLE_FP4
     case nvinfer1::DataType::kFP4: return "fp4"; break;
+#endif
     default: throw std::runtime_error("Unsupported data type"); break;
     }
 

@@ -1086,13 +1086,16 @@ class RocketKVCacheManager(KVCacheManager):
         cache_size_per_token = math.ceil(
             kv_factor * sum(self.num_kv_heads_per_layer) * self.head_dim)
 
-        if self.dtype not in (DataType.FP8, DataType.HALF, DataType.BF16,
-                              DataType.FLOAT, DataType.NVFP4):
+        _supported_kv_dtypes = [DataType.FP8, DataType.HALF, DataType.BF16, DataType.FLOAT]
+        if hasattr(DataType, 'NVFP4'):
+            _supported_kv_dtypes.append(DataType.NVFP4)
+
+        if self.dtype not in _supported_kv_dtypes:
             raise ValueError(f'Cannot support {self.dtype} KV cache.')
 
         cache_size_bytes_per_token = get_size_in_bytes(cache_size_per_token,
                                                        self.dtype)
-        if self.dtype == DataType.NVFP4:
+        if hasattr(DataType, 'NVFP4') and self.dtype == DataType.NVFP4:
             cache_size_bytes_per_token += self.calculate_scaling_factor_size_bytes(
                 cache_size_per_token,
                 quant_vector_size=16,

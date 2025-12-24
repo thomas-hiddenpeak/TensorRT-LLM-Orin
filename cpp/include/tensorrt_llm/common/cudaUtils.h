@@ -21,7 +21,11 @@
 #include "tensorrt_llm/common/cudaDriverWrapper.h"
 #include "tensorrt_llm/common/cudaFp8Utils.h"
 #if ENABLE_FP4
+#ifdef ENABLE_FP4
 #include <cuda_fp4.h>
+#else
+#include "tensorrt_llm/common/fp4_compat.h"
+#endif
 #endif
 #include "tensorrt_llm/common/logger.h"
 #include "tensorrt_llm/common/tllmException.h"

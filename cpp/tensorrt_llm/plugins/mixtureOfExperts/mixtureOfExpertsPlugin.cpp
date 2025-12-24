@@ -224,7 +224,9 @@ std::unique_ptr<kernels::CutlassMoeFCRunnerInterface> switch_output_type(nvinfer
 {
     switch (output_type)
     {
+#ifdef ENABLE_FP4
     case nvinfer1::DataType::kFP4:
+#endif
     case nvinfer1::DataType::kFP8:
         // TODO We need an atomic FP8 reduction for the finalize fusions
         TLLM_THROW("Outputting %d directly is not currently supported", static_cast<int>(output_type));
@@ -255,12 +257,19 @@ std::unique_ptr<kernels::CutlassMoeFCRunnerInterface> switch_output_type(nvinfer
 
 void MixtureOfExpertsPlugin::init()
 {
+#ifdef ENABLE_FP4
     TLLM_CHECK_WITH_INFO(mType == DataType::kFP8 || mType == DataType::kFP4 || mOutputType == mType,
         "MOE plugin only supports a different output type for FP4/FP8");
+#else
+    TLLM_CHECK_WITH_INFO(mType == DataType::kFP8 || mOutputType == mType,
+        "MOE plugin only supports a different output type for FP8");
+#endif
     TLLM_CHECK_WITH_INFO(mType != DataType::kFP8 || tensorrt_llm::common::getSMVersion() >= 89,
         "MoE FP8 is not supported for architectures less than SM89");
+#ifdef ENABLE_FP4
     TLLM_CHECK_WITH_INFO(mType != DataType::kFP4 || (tensorrt_llm::common::getSMVersion() >= 100),
         "MoE FP4 is only supported on architecture SM100 or later");
+#endif
 
     TLLM_CHECK_WITH_INFO(!hasLora() || mLoraType == mOutputType, "The LoraType need to keep same with moe OutputType.");
 
@@ -288,7 +297,11 @@ void MixtureOfExpertsPlugin::init()
 #ifdef ENABLE_FP8
     else if (mType == DataType::kFP8 && mWeightType == DataType::kINT4 && mOutputType == DataType::kHALF)
     {
+#ifdef ENABLE_FP4
         mMOERunner = std::make_unique<kernels::CutlassMoeFCRunner<__nv_fp8_e4m3, cutlass::uint4b_t, half, half>>();
+#else
+        TLLM_THROW("FP8+INT4 MoE requires CUDA 12.8+ and TensorRT 10.8+ (ENABLE_FP4 support)");
+#endif
     }
 #endif
 #ifdef ENABLE_BF16
@@ -307,8 +320,12 @@ void MixtureOfExpertsPlugin::init()
 #ifdef ENABLE_FP8
     else if (mType == DataType::kFP8 && mWeightType == DataType::kINT4 && mOutputType == DataType::kBF16)
     {
+#ifdef ENABLE_FP4
         mMOERunner = std::make_unique<
             kernels::CutlassMoeFCRunner<__nv_fp8_e4m3, cutlass::uint4b_t, __nv_bfloat16, __nv_bfloat16>>();
+#else
+        TLLM_THROW("FP8+INT4 MoE requires CUDA 12.8+ and TensorRT 10.8+ (ENABLE_FP4 support)");
+#endif
     }
 #endif
 #endif

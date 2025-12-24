@@ -27,6 +27,9 @@ using CutlassType = ::tensorrt_llm::kernels::cutlass_kernels::CutlassType<T>;
 
 namespace tensorrt_llm::plugins
 {
+
+#ifdef ENABLE_FP4
+// FP4 version with scale factor support
 template <typename K, typename V, DataType ElementA, DataType ElementB, DataType ElementD>
 static std::pair<K, V> makeEntry()
 {
@@ -54,8 +57,40 @@ static std::map<K, V> getTypedInstantiators()
         makeEntry<K, V, DataType::kFP8, DataType::kFP8, DataType::kHALF>(),
         makeEntry<K, V, DataType::kFP8, DataType::kFP8, DataType::kBF16>(),
         makeEntry<K, V, DataType::kFP4, DataType::kFP4, DataType::kHALF>(),
-        makeEntry<K, V, DataType::kFP4, DataType::kFP4, DataType::kBF16>()});
+        makeEntry<K, V, DataType::kFP4, DataType::kFP4, DataType::kBF16>()
+    });
 }
+#else
+// Non-FP4 version without scale factor support
+template <typename K, typename V, DataType ElementA, DataType ElementB, DataType ElementD>
+static std::pair<K, V> makeEntry()
+{
+    return {std::make_tuple(ElementA, ElementB, ElementD),
+        [&]()
+        {
+            using GemmTraits
+                = cutlass_kernels::GemmTypes<typename CutlassType<ElementA>::type, typename CutlassType<ElementB>::type,
+                    typename CutlassType<ElementD>::type,                                         // C, unused
+                    typename CutlassType<ElementD>::type,
+                    void, // SFA - no scale factor without FP4
+                    void, // SFB - no scale factor without FP4
+                    cutlass::layout::RowMajor, cutlass::layout::ColumnMajor,
+                    cutlass::layout::RowMajor,                                                    // C, unused
+                    cutlass::layout::RowMajor>;
+            return new cutlass_kernels::GemmAllReduceImplRunner<GemmTraits>();
+        }};
+}
+
+template <typename K, typename V>
+static std::map<K, V> getTypedInstantiators()
+{
+    return std::map<K, V>({makeEntry<K, V, DataType::kHALF, DataType::kHALF, DataType::kHALF>(),
+        makeEntry<K, V, DataType::kBF16, DataType::kBF16, DataType::kBF16>(),
+        makeEntry<K, V, DataType::kFP8, DataType::kFP8, DataType::kHALF>(),
+        makeEntry<K, V, DataType::kFP8, DataType::kFP8, DataType::kBF16>()
+    });
+}
+#endif
 
 ////////////////////////////////////////////////////////////
 // GemmAllReducePlugin Methods

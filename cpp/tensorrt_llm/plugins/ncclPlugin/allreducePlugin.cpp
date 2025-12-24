@@ -188,7 +188,11 @@ bool AllreducePlugin::supportsFormatCombination(
         {
             if (pos == nbInputs)
             {
+#ifdef ENABLE_FP4
                 return (inOut[pos].type == nvinfer1::DataType::kFP4) && (inOut[pos].format == TensorFormat::kLINEAR);
+#else
+                return false;
+#endif
             }
             if (pos == (nbInputs + 2))
             {
@@ -543,7 +547,11 @@ nvinfer1::DataType AllreducePlugin::getOutputDataType(
     {
         if (index == 0)
         {
+#ifdef ENABLE_FP4
             return nvinfer1::DataType::kFP4;
+#else
+            TLLM_THROW("FP4 not supported - rebuild with ENABLE_FP4=ON");
+#endif
         }
         else if (index == 2)
         {

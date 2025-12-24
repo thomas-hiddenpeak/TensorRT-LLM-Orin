@@ -25,6 +25,8 @@
 #include "tensorrt_llm/kernels/cutlass_kernels/fp8_blockscale_gemm/fp8_blockscale_gemm.h"
 #ifdef ENABLE_FP4
 #include <cuda_fp4.h>
+#else
+#include "tensorrt_llm/common/fp4_compat.h"
 #endif
 #include <NvInferRuntime.h>
 #include <array>
@@ -810,7 +812,9 @@ private:
 
     CubKeyValueSorter sorter_;
     MoeGemmRunner<T, WeightType, OutputType, ScaleBiasType> moe_gemm_runner_;
+#ifdef BUILD_FP8_BLOCKSCALE_GEMM
     std::unique_ptr<DeepSeekBlockScaleGemmRunner> blockscale_gemm_runner_;
+#endif
 
     std::optional<cutlass_extensions::CutlassGemmConfig> gemm1_config_;
     std::optional<cutlass_extensions::CutlassGemmConfig> gemm2_config_;
@@ -895,6 +899,7 @@ public:
         mSorter.updateNumExperts(mNumExpertsPerNode);
 
         mScalingType = TmaWarpSpecializedGroupedGemmInput::FpXBlockScalingType::NONE;
+#ifdef ENABLE_FP4
         if (dtype == nvinfer1::DataType::kFP8
             && (wtype == nvinfer1::DataType::kFP4 || wtype == nvinfer1::DataType::kINT64))
         {
@@ -905,6 +910,7 @@ public:
         {
             mScalingType = TmaWarpSpecializedGroupedGemmInput::FpXBlockScalingType::NVFP4;
         }
+#endif
     }
 
     void prepare(int num_tokens, char* workspace, void const* expert_weights, cudaStream_t stream);

@@ -133,8 +133,12 @@ bool FusedLayernormPlugin::supportsFormatCombination(
     {
         if (mNeedQuantize)
         {
+#ifdef ENABLE_FP4
             // fp4 quantized output -- fp4 padded tp int64
             return (inOut[pos].type == nvinfer1::DataType::kFP4) && (inOut[pos].format == TensorFormat::kLINEAR);
+#else
+            return false;
+#endif
         }
         return (inOut[pos].type == mType) && (inOut[pos].format == TensorFormat::kLINEAR);
     }
@@ -237,7 +241,11 @@ nvinfer1::DataType FusedLayernormPlugin::getOutputDataType(
         // Output 0 quantized output of layernorm - fp4 padded to int64
         if (mNeedQuantize)
         {
+#ifdef ENABLE_FP4
             return nvinfer1::DataType::kFP4;
+#else
+            TLLM_THROW("FP4 not supported - rebuild with ENABLE_FP4=ON");
+#endif
         }
         return mType;
     }

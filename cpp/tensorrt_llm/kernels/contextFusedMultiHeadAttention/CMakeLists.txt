@@ -34,7 +34,17 @@ set_target_properties(
                                    CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
 foreach(arch IN ITEMS 80 86 89 90 100 120)
+  # Check if this architecture should be built
+  set(SHOULD_BUILD OFF)
   if("${arch}" IN_LIST CMAKE_CUDA_ARCHITECTURES_ORIG)
+    set(SHOULD_BUILD ON)
+  endif()
+  # SM87 (Jetson AGX Orin) can use SM86 kernels - build them
+  if("${arch}" EQUAL 86 AND "87" IN_LIST CMAKE_CUDA_ARCHITECTURES_ORIG)
+    set(SHOULD_BUILD ON)
+    message(STATUS "Building SM 86 context FMHA kernels for SM 87 compatibility")
+  endif()
+  if(SHOULD_BUILD)
     file(GLOB arch_files "fmha_v2_cu/*_sm${arch}.cu")
     if(arch_files)
       set(TARGET_NAME _context_attention_kernels_${arch})

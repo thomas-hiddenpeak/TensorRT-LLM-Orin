@@ -22,11 +22,19 @@
 #include "tensorrt_llm/common/quantization.h"
 #include "tensorrt_llm/kernels/cutlass_kernels/fp8_blockscale_gemm/fp8_blockscale_gemm.h"
 #include <cstdint>
-#ifdef ENABLE_FP4
-#include <cuda_fp4.h>
-#endif
+// FP4 compatibility is handled via moe_gemm_kernels.h -> fp4_compat.h
 #include "tensorrt_llm/common/config.h"
 #include <NvInferRuntime.h>
+
+// TensorRT DataType::kFP4 compatibility for TRT < 10.8
+#ifndef ENABLE_FP4
+namespace nvinfer1_compat {
+    constexpr auto kFP4_placeholder = static_cast<nvinfer1::DataType>(255);
+}
+#define DATATYPE_KFP4 nvinfer1_compat::kFP4_placeholder
+#else
+#define DATATYPE_KFP4 DATATYPE_KFP4
+#endif
 #include <array>
 #include <cuda_runtime_api.h>
 #include <map>
@@ -869,7 +877,9 @@ private:
         cudaStream_t stream, int64_t* expert_first_token_offset = nullptr, int const num_experts_per_node = 0);
 
     MoeGemmRunner<T, WeightType, OutputType, ScaleBiasType> moe_gemm_runner_;
+#ifdef BUILD_FP8_BLOCKSCALE_GEMM
     std::unique_ptr<DeepSeekBlockScaleGemmRunner> blockscale_gemm_runner_;
+#endif
 
     std::optional<cutlass_extensions::CutlassGemmConfig> gemm1_config_;
     std::optional<cutlass_extensions::CutlassGemmConfig> gemm2_config_;
@@ -952,12 +962,12 @@ public:
 
         mScalingType = TmaWarpSpecializedGroupedGemmInput::FpXBlockScalingType::NONE;
         if (dtype == nvinfer1::DataType::kFP8
-            && (wtype == nvinfer1::DataType::kFP4 || wtype == nvinfer1::DataType::kINT64))
+            && (wtype == DATATYPE_KFP4 || wtype == nvinfer1::DataType::kINT64))
         {
             mScalingType = TmaWarpSpecializedGroupedGemmInput::FpXBlockScalingType::MXFPX;
         }
-        else if ((dtype == nvinfer1::DataType::kFP4 || dtype == nvinfer1::DataType::kINT64)
-            && (wtype == nvinfer1::DataType::kFP4 || wtype == nvinfer1::DataType::kINT64))
+        else if ((dtype == DATATYPE_KFP4 || dtype == nvinfer1::DataType::kINT64)
+            && (wtype == DATATYPE_KFP4 || wtype == nvinfer1::DataType::kINT64))
         {
             mScalingType = TmaWarpSpecializedGroupedGemmInput::FpXBlockScalingType::NVFP4;
         }

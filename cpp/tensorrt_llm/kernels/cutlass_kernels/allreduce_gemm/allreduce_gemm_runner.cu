@@ -286,6 +286,7 @@ template class GemmAllReduceImplRunner<
     GemmTypes<cutlass::float_e4m3_t, cutlass::float_e4m3_t, cutlass::half_t, cutlass::half_t, void, void,
         cutlass::layout::RowMajor, cutlass::layout::ColumnMajor, cutlass::layout::RowMajor, cutlass::layout::RowMajor>>;
 
+#ifdef ENABLE_FP4
 // fp4xfp4=fp16
 template class GemmAllReduceImplRunner<GemmTypes<cutlass::float_e2m1_t, cutlass::float_e2m1_t, cutlass::half_t,
     cutlass::half_t, cutlass::float_ue4m3_t, cutlass::float_ue4m3_t, cutlass::layout::RowMajor,
@@ -295,6 +296,7 @@ template class GemmAllReduceImplRunner<GemmTypes<cutlass::float_e2m1_t, cutlass:
 template class GemmAllReduceImplRunner<GemmTypes<cutlass::float_e2m1_t, cutlass::float_e2m1_t, cutlass::bfloat16_t,
     cutlass::bfloat16_t, cutlass::float_ue4m3_t, cutlass::float_ue4m3_t, cutlass::layout::RowMajor,
     cutlass::layout::ColumnMajor, cutlass::layout::RowMajor, cutlass::layout::RowMajor>>;
+#endif
 
 } // namespace kernels::opened_cutlass_kernels
 

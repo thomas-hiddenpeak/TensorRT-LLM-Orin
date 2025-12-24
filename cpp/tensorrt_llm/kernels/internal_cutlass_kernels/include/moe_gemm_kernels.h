@@ -36,6 +36,8 @@
 
 #ifdef ENABLE_FP4
 #include <cuda_fp4.h>
+#else
+#include "tensorrt_llm/common/fp4_compat.h"
 #endif
 
 TRTLLM_NAMESPACE_BEGIN

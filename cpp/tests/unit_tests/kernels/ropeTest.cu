@@ -26,7 +26,11 @@
 #include <tensorrt_llm/kernels/quantization.h>
 
 #ifdef ENABLE_FP4
+#ifdef ENABLE_FP4
 #include <cuda_fp4.h>
+#else
+#include "tensorrt_llm/common/fp4_compat.h"
+#endif
 #endif
 
 using namespace tensorrt_llm::runtime;

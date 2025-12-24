@@ -21,7 +21,9 @@
 #include "tensorrt_llm/common/logger.h"
 #include "tensorrt_llm/common/memoryUtils.h"
 #include "tensorrt_llm/kernels/decoderMaskedMultiheadAttention.h"
+#ifdef BUILD_FLASH_MLA
 #include "tensorrt_llm/kernels/flashMLA/flash_mla.h"
+#endif
 #include "tensorrt_llm/kernels/gptKernels.h"
 #include "tensorrt_llm/kernels/kvCacheUtils.h"
 #include "tensorrt_llm/kernels/multiHeadAttentionCommon.h"
@@ -1124,6 +1126,7 @@ int AttentionOp::mlaGeneration(
         mTllmGenFMHARunner->run(tllmRunnerParams);
         sync_check_cuda_error(stream);
     }
+#ifdef BUILD_FLASH_MLA
     else if (mUseGenFlashMLA)
     {
         static constexpr int block_size_n = 64;
@@ -1246,6 +1249,7 @@ int AttentionOp::mlaGeneration(
             TLLM_THROW("Unsupported data type for FlashMLA");
         }
     }
+#endif // BUILD_FLASH_MLA
     else
     {
         // Try XQA optimization first when CP is not used.

@@ -35,8 +35,7 @@ target_link_libraries(th_utils PUBLIC ${TORCH_LIBRARIES} ${CUBLAS_LIB}
                                       ${CURAND_LIB})
 
 # TODO This does not compile with internal cutlass MOE gemm
-add_library(
-  th_common SHARED
+set(TH_COMMON_SOURCES
   mlaPreprocessOp.cpp
   allgatherOp.cpp
   allreduceOp.cpp
@@ -47,20 +46,12 @@ add_library(
   cuteDslMoeUtilsOp.cpp
   cutlassScaledMM.cpp
   cublasScaledMM.cpp
-  cublasFp4ScaledMM.cpp
-  cudaNvfp4MM.cpp
   cudaScaledMM.cpp
   dynamicDecodeOp.cpp
   fmhaPackMaskOp.cpp
   fp8Op.cpp
   fp8PerTensorScalingTrtllmGenGemm.cpp
-  fp4Op.cpp
-  fp4Gemm.cpp
-  fp4GemmTrtllmGen.cpp
   fp8BatchedGemmTrtllmGen.cpp
-  fp4Quantize.cpp
-  fp4BatchedQuantize.cpp
-  fp4xFp8GemmTrtllmGen.cpp
   fp8BlockScalingGemm.cpp
   fp8RowwiseGemm.cpp
   fp8Quantize.cpp
@@ -79,11 +70,9 @@ add_library(
   moeAlltoAllOp.cpp
   moeLoadBalanceOp.cpp
   moeAlignOp.cpp
-  mxFp4BlockScaleMoe.cpp
   mxFp8Quantize.cpp
   fp8BlockScaleMoe.cpp
   fp8PerTensorScaleMoe.cpp
-  fp4BlockScaleMoe.cpp
   noAuxTcOp.cpp
   IndexerKCacheScatterOp.cpp
   IndexerTopKOp.cpp
@@ -105,10 +94,27 @@ add_library(
   finegrained_mixed_dtype_gemm_thop.cpp
   tinygemm2.cpp
   dsv3RopeOp.cpp)
+
+# FP4 related files (require CUDA 12.8+)
+if(ENABLE_FP4)
+  list(APPEND TH_COMMON_SOURCES
+    cublasFp4ScaledMM.cpp
+    cudaNvfp4MM.cpp
+    fp4Op.cpp
+    fp4Gemm.cpp
+    fp4GemmTrtllmGen.cpp
+    fp4Quantize.cpp
+    fp4BatchedQuantize.cpp
+    fp4xFp8GemmTrtllmGen.cpp
+    mxFp4BlockScaleMoe.cpp
+    fp4BlockScaleMoe.cpp)
+endif()
+
+add_library(th_common SHARED ${TH_COMMON_SOURCES})
 set_property(TARGET th_common PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(
   th_common PRIVATE ${TORCH_LIBRARIES} th_utils ${Python3_LIBRARIES}
-                    ${SHARED_TARGET} pg_utils)
+                    ${SHARED_TARGET} pg_utils moe_gemm_src kernels_src)
 
 if(USING_OSS_CUTLASS_LOW_LATENCY_GEMM)
   target_compile_definitions(th_common
@@ -127,6 +133,11 @@ endif()
 if(ENABLE_CUBLASLT_FP4_GEMM)
   target_compile_definitions(th_common PUBLIC ENABLE_CUBLASLT_FP4_GEMM)
   target_link_libraries(th_common PRIVATE ${CUBLASLT_LIB})
+endif()
+
+# FP8 Blockscale GEMM requires CUDA 12.8+ for cudaLaunchKernelEx API
+if(${CUDAToolkit_VERSION} VERSION_GREATER_EQUAL "12.8")
+  target_compile_definitions(th_common PUBLIC ENABLE_FP8_BLOCKSCALE_GEMM)
 endif()
 
 if(ENABLE_MULTI_DEVICE)

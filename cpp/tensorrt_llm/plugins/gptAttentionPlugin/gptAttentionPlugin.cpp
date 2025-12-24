@@ -446,7 +446,11 @@ bool GPTAttentionPlugin::supportsFormatCombination(
     {
         // Set dtype for output FP4 quantized tensor.
         posCaseLine = __LINE__;
+#ifdef ENABLE_FP4
         result = (inOut[pos].type == nvinfer1::DataType::kFP4) && (inOut[pos].format == TensorFormat::kLINEAR);
+#else
+        result = false;
+#endif
     }
     else if (pos == nbInputs + 1 && mFuseFp4Quant)
     {
@@ -1239,7 +1243,11 @@ nvinfer1::DataType GPTAttentionPlugin::getOutputDataType(
     {
         if (mFuseFp4Quant)
         {
+#ifdef ENABLE_FP4
             return nvinfer1::DataType::kFP4;
+#else
+            TLLM_THROW("FP4 not supported - rebuild with ENABLE_FP4=ON");
+#endif
         }
         return mFP8ContextFMHA && mEnableContextFMHA ? nvinfer1::DataType::kFP8
                                                      : inputTypes[getIdx(IdxEntry::QKV_TENSOR)];

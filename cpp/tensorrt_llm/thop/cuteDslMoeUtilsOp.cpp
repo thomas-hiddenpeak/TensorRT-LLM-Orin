@@ -18,7 +18,11 @@
 #include "tensorrt_llm/kernels/trtllmGenKernels/blockScaleMoe/runner.h"
 #include "tensorrt_llm/thop/thUtils.h"
 
+#ifdef ENABLE_FP4
 #include <cuda_fp4.h>
+#else
+#include "tensorrt_llm/common/fp4_compat.h"
+#endif
 
 TRTLLM_NAMESPACE_BEGIN
 
@@ -191,7 +195,11 @@ std::tuple<torch::Tensor, torch::optional<torch::Tensor>> moe_permute(torch::Ten
     }
     else if (input.scalar_type() == torch::kFloat4_e2m1fn_x2)
     {
+#ifdef ENABLE_FP4
         DISPATCH_MOE_PERMUTE(__nv_fp4_e2m1, uint8_t);
+#else
+        TORCH_CHECK(false, "FP4 is not supported on this platform (requires CUDA 12.8+)");
+#endif
     }
     else
     {
@@ -388,6 +396,7 @@ std::tuple<torch::Tensor, torch::Tensor> moe_swiglu_nvfp4_quantize(torch::Tensor
     torch::Tensor const& global_sf, torch::Tensor const& tile_idx_to_mn_limit,
     torch::Tensor const& num_non_exiting_tiles, int64_t const tile_tokens_dim)
 {
+#ifdef ENABLE_FP4
     TORCH_CHECK(input.dim() == 2, "input must be 2D.");
     TORCH_CHECK(input.size(1) % 2 == 0, "input.size(1) must be even.");
     int64_t const max_num_permuted_tokens = input.size(0);
@@ -438,6 +447,10 @@ std::tuple<torch::Tensor, torch::Tensor> moe_swiglu_nvfp4_quantize(torch::Tensor
 #undef DISPATCH_MOE_ACTIVATION
 
     return {output, output_sf};
+#else
+    TORCH_CHECK(false, "NVFP4 quantize is not supported on this platform (requires CUDA 12.8+)");
+    return {torch::Tensor(), torch::Tensor()};
+#endif
 }
 
 torch::Tensor moe_gelu(torch::Tensor const& input, torch::Tensor const& tile_idx_to_mn_limit,

@@ -33,7 +33,9 @@
 #include "tensorrt_llm/plugins/lruPlugin/lruPlugin.h"
 #include "tensorrt_llm/plugins/mambaConv1dPlugin/mambaConv1dPlugin.h"
 #include "tensorrt_llm/plugins/mixtureOfExperts/mixtureOfExpertsPlugin.h"
+#ifdef ENABLE_FP4
 #include "tensorrt_llm/plugins/quantizeToFP4Plugin/quantizeToFP4Plugin.h"
+#endif
 #if ENABLE_MULTI_DEVICE
 #include "tensorrt_llm/plugins/cpSplitPlugin/cpSplitPlugin.h"
 #include "tensorrt_llm/plugins/gemmAllReducePlugin/gemmAllReducePlugin.h"
@@ -48,7 +50,9 @@
 #include "tensorrt_llm/plugins/eaglePlugin/eagleDecodeDraftTokensPlugin.h"
 #include "tensorrt_llm/plugins/eaglePlugin/eaglePrepareDrafterInputsPlugin.h"
 #include "tensorrt_llm/plugins/eaglePlugin/eagleSampleAndAcceptDraftTokensPlugin.h"
+#ifdef ENABLE_FP4
 #include "tensorrt_llm/plugins/fp4GemmPlugin/fp4GemmPlugin.h"
+#endif
 #include "tensorrt_llm/plugins/lowLatencyGemmPlugin/lowLatencyGemmPlugin.h"
 #include "tensorrt_llm/plugins/lowLatencyGemmSwigluPlugin/lowLatencyGemmSwigluPlugin.h"
 #include "tensorrt_llm/plugins/qserveGemmPlugin/qserveGemmPlugin.h"
@@ -225,7 +229,9 @@ extern "C"
         static tensorrt_llm::plugins::SmoothQuantGemmPluginCreator smoothQuantGemmPluginCreator;
         static tensorrt_llm::plugins::QServeGemmPluginCreator qserveGemmPluginCreator;
         static tensorrt_llm::plugins::LayernormQuantizationPluginCreator layernormQuantizationPluginCreator;
+#ifdef ENABLE_FP4
         static tensorrt_llm::plugins::QuantizeToFP4PluginCreator quantizeToFP4PluginCreator;
+#endif
         static tensorrt_llm::plugins::QuantizePerTokenPluginCreator quantizePerTokenPluginCreator;
         static tensorrt_llm::plugins::QuantizeTensorPluginCreator quantizeTensorPluginCreator;
         static tensorrt_llm::plugins::RmsnormQuantizationPluginCreator rmsnormQuantizationPluginCreator;
@@ -235,7 +241,9 @@ extern "C"
         static tensorrt_llm::plugins::LookupPluginCreator lookupPluginCreator;
         static tensorrt_llm::plugins::LoraPluginCreator loraPluginCreator;
         static tensorrt_llm::plugins::SelectiveScanPluginCreator selectiveScanPluginCreator;
+#ifdef ENABLE_FP4
         static tensorrt_llm::plugins::Fp4GemmPluginCreator fp4GemmPluginCreator;
+#endif
         static tensorrt_llm::plugins::MambaConv1dPluginCreator mambaConv1DPluginCreator;
         static tensorrt_llm::plugins::lruPluginCreator lruPluginCreator;
         static tensorrt_llm::plugins::CumsumLastDimPluginCreator cumsumLastDimPluginCreator;
@@ -267,7 +275,9 @@ extern "C"
                   creatorPtr(smoothQuantGemmPluginCreator),
                   creatorPtr(qserveGemmPluginCreator),
                   creatorPtr(layernormQuantizationPluginCreator),
+#ifdef ENABLE_FP4
                   creatorPtr(quantizeToFP4PluginCreator),
+#endif
                   creatorPtr(quantizePerTokenPluginCreator),
                   creatorPtr(quantizeTensorPluginCreator),
                   creatorPtr(rmsnormQuantizationPluginCreator),
@@ -276,7 +286,9 @@ extern "C"
                   creatorPtr(lookupPluginCreator),
                   creatorPtr(loraPluginCreator),
                   creatorPtr(selectiveScanPluginCreator),
+#ifdef ENABLE_FP4
                   creatorPtr(fp4GemmPluginCreator),
+#endif
                   creatorPtr(mambaConv1DPluginCreator),
                   creatorPtr(lruPluginCreator),
                   creatorPtr(cumsumLastDimPluginCreator),

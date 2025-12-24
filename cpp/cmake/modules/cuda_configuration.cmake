@@ -175,7 +175,17 @@ function(setup_cuda_architectures)
       103
       120)
   foreach(CUDA_ARCH IN LISTS ARCHITECTURES_WITH_KERNELS)
-    if(NOT ${CUDA_ARCH} IN_LIST CMAKE_CUDA_ARCHITECTURES_ORIG)
+    # Check if this architecture should be included
+    set(SHOULD_INCLUDE OFF)
+    if(${CUDA_ARCH} IN_LIST CMAKE_CUDA_ARCHITECTURES_ORIG)
+      set(SHOULD_INCLUDE ON)
+    endif()
+    # SM87 (Jetson AGX Orin) can use SM86 kernels - keep them
+    if(${CUDA_ARCH} EQUAL 86 AND "87" IN_LIST CMAKE_CUDA_ARCHITECTURES_ORIG)
+      set(SHOULD_INCLUDE ON)
+      message(STATUS "Keeping SM 86 kernels for SM 87 compatibility")
+    endif()
+    if(NOT SHOULD_INCLUDE)
       add_definitions("-DEXCLUDE_SM_${CUDA_ARCH}")
       message(STATUS "Excluding SM ${CUDA_ARCH}")
     endif()

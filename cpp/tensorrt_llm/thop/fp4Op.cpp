@@ -20,7 +20,11 @@
 #include "tensorrt_llm/thop/thUtils.h"
 
 #include <cuda_fp16.h>
+#ifdef ENABLE_FP4
 #include <cuda_fp4.h>
+#else
+#include "tensorrt_llm/common/fp4_compat.h"
+#endif
 #include <cuda_fp8.h>
 
 #include <cstdint>

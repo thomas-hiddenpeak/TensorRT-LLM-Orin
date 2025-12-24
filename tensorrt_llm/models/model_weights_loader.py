@@ -11,7 +11,7 @@ from safetensors import safe_open
 from tqdm import tqdm
 from transformers import PreTrainedModel
 
-from .._utils import trt_dtype_to_torch
+from .._utils import TRT_FP4_DTYPE, TRT_HAS_FP4, trt_dtype_to_torch
 from ..layers.moe import MOEWeightWrapper
 from ..logger import logger
 from ..quantization.layers import (WeightOnlyGroupwiseQuantColumnLinear,
@@ -365,7 +365,8 @@ class ModelWeightsLoader:
                 continue
             w_shape = weights[tllm_key].shape
             # WAR for 4bit datatype shape mismatch.
-            if w_shape != param.shape and param.dtype != trt.fp4:
+            _is_fp4 = TRT_HAS_FP4 and param.dtype == TRT_FP4_DTYPE
+            if w_shape != param.shape and not _is_fp4:
                 logger.warning(
                     f'{tllm_key} has invalid shape {w_shape}. Expected {param.shape}.'
                 )
